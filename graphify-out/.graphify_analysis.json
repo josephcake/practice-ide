@@ -1,0 +1,330 @@
+{
+  "communities": {
+    "0": [
+      "http_server",
+      "json",
+      "os",
+      "server",
+      "server_brief",
+      "server_build_review_prompt",
+      "server_build_user_prompt",
+      "server_clean_list",
+      "server_clip",
+      "server_decode_json_text",
+      "server_deepseek_call",
+      "server_graph_status",
+      "server_graphify_bin",
+      "server_handler",
+      "server_handler_do_get",
+      "server_handler_do_post",
+      "server_handler_end_headers",
+      "server_handler_handle_graph_build",
+      "server_handler_init",
+      "server_handler_log_message",
+      "server_handler_send_json",
+      "server_limit_steps",
+      "server_load_api_key",
+      "server_main",
+      "server_parse_hint",
+      "server_parse_review",
+      "server_rationale_2",
+      "server_review_ok",
+      "server_ssl_context",
+      "shutil",
+      "simplehttprequesthandler",
+      "ssl",
+      "subprocess",
+      "threading",
+      "time",
+      "urllib_error",
+      "urllib_request"
+    ],
+    "1": [
+      "js_app",
+      "js_app_ai_verdict",
+      "js_app_aiclose",
+      "js_app_all_coding",
+      "js_app_cat_label",
+      "js_app_codelayer",
+      "js_app_default_queue",
+      "js_app_default_queue_gs",
+      "js_app_ed",
+      "js_app_graphbtn",
+      "js_app_graphbuildempty",
+      "js_app_graphclose",
+      "js_app_graphmodal",
+      "js_app_graphrebuild",
+      "js_app_gutter",
+      "js_app_keys",
+      "js_app_layout",
+      "js_app_savedlayout",
+      "js_app_seedscrapedqueue",
+      "js_app_sen_abbr",
+      "js_app_sen_label",
+      "js_app_state",
+      "js_app_store"
+    ],
+    "2": [
+      "js_app_appendlog",
+      "js_app_appendrunhistory",
+      "js_app_bindconsole",
+      "js_app_buildrunsnapshot",
+      "js_app_consoleempty",
+      "js_app_consolehtml",
+      "js_app_consoleline",
+      "js_app_fmt",
+      "js_app_markrunstale",
+      "js_app_namesfor",
+      "js_app_renderconsole",
+      "js_app_renderresults",
+      "js_app_runtests",
+      "js_app_schedulerunpersist",
+      "js_app_setstatus",
+      "js_app_showrunning",
+      "js_app_writerunsnapshot"
+    ],
+    "3": [
+      "js_app_applylayout",
+      "js_app_briefvalue",
+      "js_app_buildaicontext",
+      "js_app_clamp",
+      "js_app_cleanpseudo",
+      "js_app_isnarrowai",
+      "js_app_lastrunpassed",
+      "js_app_makeresizer",
+      "js_app_maybereviewafterpass",
+      "js_app_renderaihint",
+      "js_app_requestaihint",
+      "js_app_requestaireview",
+      "js_app_reviewhtml",
+      "js_app_savelayout",
+      "js_app_setaipane",
+      "js_app_toast",
+      "js_app_toggleaipane"
+    ],
+    "4": [
+      "js_app_allitems",
+      "js_app_boot",
+      "js_app_byid",
+      "js_app_matches",
+      "js_app_nextqueuedid",
+      "js_app_offernext",
+      "js_app_renderqueue",
+      "js_app_rendersidebar",
+      "js_app_toggledone"
+    ],
+    "5": [
+      "js_app_esc",
+      "js_app_formatbody",
+      "js_app_frameworkhtml",
+      "js_app_highlight",
+      "js_app_itemrow",
+      "js_app_openplan",
+      "js_app_openrounds",
+      "js_app_renderdoc",
+      "js_app_senclass"
+    ],
+    "6": [
+      "js_app_loadcode",
+      "js_app_open",
+      "js_app_painteditor",
+      "js_app_rendertabs",
+      "js_app_restorerun",
+      "js_app_syncgutter"
+    ],
+    "7": [
+      "pathlib",
+      "re",
+      "sys",
+      "tools_patch_graph_html",
+      "tools_patch_graph_html_main",
+      "tools_patch_graph_html_rationale_2"
+    ],
+    "8": [
+      "js_questions",
+      "js_questions_design_questions",
+      "js_questions_questions",
+      "js_questions_round_plan",
+      "js_questions_rubric"
+    ],
+    "9": [
+      "js_app_graphclock",
+      "js_app_opengraph",
+      "js_app_rebuildgraph",
+      "js_app_setgraphstatus"
+    ],
+    "10": [
+      "js_app_persistqueue",
+      "js_app_queueadd",
+      "js_app_queuemove",
+      "js_app_queueremove"
+    ],
+    "11": [
+      "js_gs_questions",
+      "js_gs_questions_gs_questions",
+      "js_gs_questions_gs_rounds"
+    ],
+    "12": [
+      "js_gs_scraped",
+      "js_gs_scraped_gs_scraped",
+      "js_gs_scraped_gs_scraped_design"
+    ],
+    "13": [
+      "js_runner",
+      "js_runner_runner",
+      "js_runner_worker_src"
+    ],
+    "14": [
+      "tools_build_graph",
+      "tools_build_graph_sh__entry"
+    ]
+  },
+  "cohesion": {
+    "0": 0.0945945945945946,
+    "1": 0.08695652173913043,
+    "2": 0.17647058823529413,
+    "3": 0.21323529411764705,
+    "4": 0.2777777777777778,
+    "5": 0.3333333333333333,
+    "6": 0.4666666666666667,
+    "7": 0.4,
+    "8": 0.4,
+    "9": 0.5,
+    "10": 0.5,
+    "11": 0.6666666666666666,
+    "12": 0.6666666666666666,
+    "13": 0.6666666666666666,
+    "14": 1.0
+  },
+  "gods": [
+    {
+      "id": "js_app_renderresults",
+      "label": "renderResults()",
+      "degree": 15
+    },
+    {
+      "id": "js_app_esc",
+      "label": "esc()",
+      "degree": 13
+    },
+    {
+      "id": "js_app_open",
+      "label": "open()",
+      "degree": 12
+    },
+    {
+      "id": "js_app_runtests",
+      "label": "runTests()",
+      "degree": 11
+    },
+    {
+      "id": "js_app_setaipane",
+      "label": "setAIPane()",
+      "degree": 11
+    },
+    {
+      "id": "js_app_renderaihint",
+      "label": "renderAIHint()",
+      "degree": 10
+    },
+    {
+      "id": "js_app_renderdoc",
+      "label": "renderDoc()",
+      "degree": 10
+    },
+    {
+      "id": "server_handler",
+      "label": "Handler",
+      "degree": 9
+    },
+    {
+      "id": "js_app_requestaireview",
+      "label": "requestAIReview()",
+      "degree": 8
+    },
+    {
+      "id": "js_app_renderqueue",
+      "label": "renderQueue()",
+      "degree": 8
+    }
+  ],
+  "surprises": [
+    {
+      "source": "toggleDone()",
+      "target": "maybeReviewAfterPass()",
+      "source_files": [
+        "js/app.js",
+        "js/app.js"
+      ],
+      "confidence": "INFERRED",
+      "relation": "indirect_call",
+      "note": "Bridges community 3 → community 4"
+    },
+    {
+      "source": "persistQueue()",
+      "target": "renderQueue()",
+      "source_files": [
+        "js/app.js",
+        "js/app.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 10 → community 4"
+    },
+    {
+      "source": "consoleLine()",
+      "target": "esc()",
+      "source_files": [
+        "js/app.js",
+        "js/app.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 2 → community 5"
+    },
+    {
+      "source": "renderResults()",
+      "target": "offerNext()",
+      "source_files": [
+        "js/app.js",
+        "js/app.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 2 → community 4"
+    },
+    {
+      "source": "renderResults()",
+      "target": "requestAIReview()",
+      "source_files": [
+        "js/app.js",
+        "js/app.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 2 → community 3"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `renderResults()` connect `Community 2` to `Community 1`, `Community 3`, `Community 4`, `Community 5`, `Community 6`?",
+      "why": "High betweenness centrality (0.003) - this node is a cross-community bridge."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 0` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.0945945945945946 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `esc()` connect `Community 5` to `Community 1`, `Community 2`, `Community 3`, `Community 4`?",
+      "why": "High betweenness centrality (0.003) - this node is a cross-community bridge."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 1` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.08695652173913043 - nodes in this community are weakly interconnected."
+    }
+  ]
+}

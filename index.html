@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Senior SWE Interview Prep - Coding IDE</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<nav class="global-nav">
+  <div class="global-brand">
+    <span class="global-title">Senior SWE Interview Prep</span>
+    <span class="global-sub">Coding + System Design</span>
+  </div>
+  <div class="page-nav" id="page-nav" role="tablist" aria-label="Practice mode">
+    <button data-page="coding" class="on" role="tab" aria-selected="true">Algorithm</button>
+    <button data-page="design" role="tab" aria-selected="false">System Design</button>
+  </div>
+  <div class="spacer"></div>
+</nav>
+<div class="app">
+  <!-- ---------------- sidebar ---------------- -->
+  <aside class="sidebar">
+    <div class="progress-wrap">
+      <div class="progress-top">
+        <span class="lbl" id="prog-label">Completed</span>
+        <span class="val" id="prog-val">0/0</span>
+      </div>
+      <div class="bar"><div id="prog-bar"></div></div>
+    </div>
+
+    <div class="side-code" id="side-code">
+    <!-- practising queue -->
+    <div class="queue-head">
+      <span class="queue-title">Queue</span>
+      <span class="queue-count" id="queue-count">0</span>
+      <div class="spacer"></div>
+      <button class="btn tiny ghost" id="btn-queue-next" title="Open the next unanswered question">Next ▸</button>
+      <button class="btn tiny ghost" id="btn-queue-reset" title="Clear the queue">Clear</button>
+    </div>
+    <nav class="list queue-list" id="queue-list"></nav>
+    <div class="resizer h" id="resize-queue" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="Resize queue" title="Drag to resize the queue · double-click to reset"></div>
+
+    <!-- full library -->
+    <div class="side-tools">
+      <div class="lib-head">
+        <span class="lib-title">Library</span>
+        <span class="lib-hint">click + to queue</span>
+      </div>
+      <input id="search" class="search" placeholder="Search questions, hints, solutions" />
+      <div class="chips" id="level-chips">
+        <button class="chip on" data-level="all">All</button>
+        <button class="chip" data-level="1">L1 warm-up</button>
+        <button class="chip" data-level="2">L2 core</button>
+        <button class="chip" data-level="3">L3 deep</button>
+      </div>
+      <div class="chips" id="sen-chips" title="Role level reported by the source. Only labeled questions appear under a specific level; unlabeled ones stay under All levels.">
+        <button class="chip on" data-sen="all" title="Show every question, labeled or not">Any</button>
+        <button class="chip" data-sen="junior">Junior</button>
+        <button class="chip" data-sen="mid">Mid</button>
+        <button class="chip" data-sen="senior">Senior</button>
+        <button class="chip" data-sen="manager">Manager</button>
+        <button class="chip" data-sen="N/A">N/A</button>
+      </div>
+      <div class="chips" id="cat-chips">
+        <button class="chip on" data-cat="all">All</button>
+        <button class="chip" data-cat="arrays">Arrays</button>
+        <button class="chip" data-cat="strings">Strings</button>
+        <button class="chip" data-cat="linkedlist">Lists</button>
+        <button class="chip" data-cat="trees">Trees</button>
+        <button class="chip" data-cat="dp">DP</button>
+        <button class="chip" data-cat="async">Async</button>
+        <button class="chip" data-cat="js">JS</button>
+        <button class="chip" data-cat="gs">GS only</button>
+      </div>
+    </div>
+
+    <nav class="list" id="q-list"></nav>
+    </div>
+
+    <!-- system design page list -->
+    <div class="side-design" id="side-design">
+      <div class="queue-head design-head">
+        <span class="queue-title">System design</span>
+        <span class="queue-count" id="design-count">0</span>
+        <div class="spacer"></div>
+        <button class="btn tiny ghost" id="btn-design-next" title="Next unanswered design question">Next ▸</button>
+      </div>
+      <div class="side-tools design-tools">
+        <input id="design-search" class="search" placeholder="Search system design" />
+      </div>
+      <nav class="list" id="design-list"></nav>
+    </div>
+  </aside>
+
+  <div class="resizer v" id="resize-sidebar" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize sidebar" title="Drag to resize the sidebar · double-click to reset"></div>
+
+  <!-- ---------------- main ---------------- -->
+  <main class="main">
+    <header class="topbar">
+      <div class="page-title">
+        <div class="title" id="q-title">Loading</div>
+        <div class="sig" id="q-sig"></div>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="btn-rounds">Rounds</button>
+      <button class="btn ghost" id="btn-graph">Graph</button>
+      <button class="btn ghost" id="btn-plan">Plan <kbd>?</kbd></button>
+      <button class="btn ghost" id="btn-notes">Notes</button>
+      <button class="btn ghost" id="btn-hint">AI hint <kbd>⌘H</kbd></button>
+      <button class="btn ghost" id="btn-reset">Reset</button>
+      <button class="btn" id="btn-done">Mark done</button>
+      <button class="btn primary" id="btn-run">Run tests <kbd>⌘↵</kbd></button>
+    </header>
+
+    <div class="workspace">
+      <!-- prompt -->
+      <section class="pane left">
+        <div class="tabs" id="tabs"></div>
+        <div class="doc" id="doc"></div>
+      </section>
+
+      <div class="resizer v" id="resize-panes" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize question and editor panes" title="Drag to resize the panes · double-click to reset"></div>
+
+      <!-- editor -->
+      <section class="pane right">
+        <div class="editor-wrap">
+          <div class="gutter" id="gutter"></div>
+          <div class="code-area">
+            <pre class="highlight" id="highlight" aria-hidden="true"></pre>
+            <textarea class="editor" id="editor" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Code editor"></textarea>
+          </div>
+        </div>
+        <div class="editor-bar">
+          <button class="btn tiny" id="btn-run-2">Run</button>
+          <span class="status" id="status"></span>
+          <div class="spacer"></div>
+          <span class="status">j / k next-prev</span>
+        </div>
+        <div class="results hidden" id="results"></div>
+      </section>
+
+      <div class="resizer v" id="resize-ai" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize AI hint panel" title="Drag to resize the AI hint panel · double-click to reset"></div>
+
+      <aside class="ai-pane" id="ai-pane" aria-label="AI hint">
+        <div class="ai-pane-head">
+          <span class="ai-pane-title">AI hint</span>
+          <span class="ai-pane-sub" id="ai-pane-sub">DeepSeek</span>
+          <div class="spacer"></div>
+          <button class="btn tiny ghost" id="btn-ai-close" title="Close AI hint">✕</button>
+        </div>
+        <div class="ai-pane-body" id="ai-body"></div>
+      </aside>
+    </div>
+
+    <!-- ---------------- system design workspace ---------------- -->
+    <section class="design-stage" id="design-stage" aria-hidden="true">
+      <div class="design-stage-main" id="design-stage-main">
+        <div class="design-empty hidden" id="design-empty">
+          <div class="design-empty-kicker">SYSTEM DESIGN</div>
+          <h2 id="design-empty-title">No architecture map for this one</h2>
+          <p>This prompt is behavioral or open-ended. Use the brief, the framework, and Notes to structure your answer.</p>
+          <button class="btn primary" id="design-empty-brief">Open brief</button>
+        </div>
+      </div>
+      <div class="design-scrim" id="design-scrim"></div>
+      <aside class="design-brief" id="design-brief" aria-label="Design brief" inert>
+        <div class="design-brief-head">
+          <span class="design-brief-title">Brief</span>
+          <div class="spacer"></div>
+          <button class="btn tiny ghost" id="design-brief-close">Close</button>
+        </div>
+        <div class="design-brief-mount" id="design-brief-mount"></div>
+      </aside>
+    </section>
+  </main>
+</div>
+
+<!-- ---------------- plan modal ---------------- -->
+<div class="modal-back" id="plan-modal">
+  <div class="modal">
+    <div class="modal-h">
+      <h3 id="plan-title">Bring-up plan</h3>
+      <div class="spacer"></div>
+      <button class="btn tiny ghost" id="plan-close">Close</button>
+    </div>
+    <div class="modal-b" id="plan-body"></div>
+  </div>
+</div>
+
+<!-- ---------------- code graph modal ---------------- -->
+<div class="modal-back" id="graph-modal">
+  <div class="modal graph-modal">
+    <div class="modal-h">
+      <h3>Code graph</h3>
+      <span class="graph-meta" id="graph-meta">Loading…</span>
+      <div class="spacer"></div>
+      <button class="btn tiny ghost" id="graph-rebuild" title="Re-scan the codebase with Graphify">Rebuild</button>
+      <a class="btn tiny ghost" id="graph-open" href="/graphify-out/graph.html" target="_blank" rel="noopener">Open ↗</a>
+      <button class="btn tiny ghost" id="graph-close">Close</button>
+    </div>
+    <div class="graph-body" id="graph-body">
+      <iframe id="graph-frame" title="Code graph"></iframe>
+      <div class="graph-empty hidden" id="graph-empty">
+        <h4>No code graph yet</h4>
+        <p>Graphify parses this project locally with tree-sitter and builds an interactive map of files, functions, and their links. No API key needed.</p>
+        <button class="btn primary" id="graph-build-empty">Build graph</button>
+        <div class="graph-msg" id="graph-empty-msg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ---------------- system design architecture modal ---------------- -->
+<div class="modal-back" id="arch-modal">
+  <div class="modal arch-modal">
+    <div class="arch-head">
+      <div class="arch-head-copy">
+        <h3 id="arch-title">Architecture</h3>
+        <div class="arch-sub" id="arch-sub"></div>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn tiny ghost arch-extra" id="arch-brief">Brief</button>
+      <button class="btn tiny ghost arch-extra" id="arch-inspector">Inspector</button>
+      <button class="btn tiny ghost arch-extra" id="arch-focus">Focus</button>
+      <select id="arch-failure" class="arch-select" title="Break a component at runtime">
+        <option value="">Failure drill</option>
+      </select>
+      <button class="btn tiny ghost" id="arch-trace">Trace request</button>
+      <button class="btn tiny ghost" id="arch-zoom-out" title="Zoom out">−</button>
+      <button class="btn tiny ghost" id="arch-zoom-in" title="Zoom in">+</button>
+      <span class="arch-zoom-label" id="arch-zoom">100%</span>
+      <button class="btn tiny ghost" id="arch-reset" title="Fit to view">Reset</button>
+      <button class="btn tiny ghost" id="arch-close">Close</button>
+    </div>
+    <div class="arch-legend" id="arch-legend"></div>
+    <div class="arch-main">
+      <div class="arch-canvas" id="arch-canvas">
+        <svg id="arch-svg" role="img" aria-label="Interactive system architecture" xmlns:xlink="http://www.w3.org/1999/xlink"></svg>
+        <div class="arch-flowbar" id="arch-flowbar">
+          <div class="arch-path-head">
+            <span class="arch-path-label">Request path</span>
+            <span class="arch-step" id="arch-step">—</span>
+          </div>
+          <div class="arch-path-steps" id="arch-paths"></div>
+          <div class="arch-path-controls">
+            <button class="btn tiny ghost" id="arch-prev" title="Previous step">←</button>
+            <button class="btn tiny ghost" id="arch-next" title="Next step">→</button>
+            <button class="btn tiny ghost" id="arch-play">▶ Play</button>
+          </div>
+          <div class="arch-narration" id="arch-narration">Pick a step, or press Trace request.</div>
+        </div>
+      </div>
+      <aside class="arch-side">
+        <div class="arch-tabs">
+          <button data-atab="inspect" class="on">Inspect</button>
+          <button data-atab="why">Why it works</button>
+          <button data-atab="tradeoffs">Trade-offs</button>
+          <button class="arch-side-close" id="arch-side-close" title="Hide inspector">✕</button>
+        </div>
+        <div class="arch-panel" id="arch-panel"></div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/questions.js"></script>
+<script src="js/gs-questions.js"></script>
+<script src="js/gs-scraped.js"></script>
+<script src="js/design-graphs.js"></script>
+<script src="js/design-extra.js"></script>
+<script src="js/runner.js"></script>
+<script src="js/app.js"></script>
+<script>
+  document.getElementById('btn-run-2').addEventListener('click', () => document.getElementById('btn-run').click());
+</script>
+</body>
+</html>

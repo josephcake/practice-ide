@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+.graphify-venv/
+
+# Graphify build cache (regenerable via tools/build-graph.sh)
+graphify-out/cache/
+
+# Node
+node_modules/
+
+# macOS
+.DS_Store
