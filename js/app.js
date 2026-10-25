@@ -697,7 +697,7 @@ function setDesignMode(on) {
     if (arch && main && arch.parentElement !== main) main.appendChild(arch);
     return;
   }
-  body.classList.remove('mode-design', 'design-focus');
+  body.classList.remove('mode-design');
   stage.setAttribute('aria-hidden', 'true');
   openBrief(false);
   const workspace = $('.workspace');
@@ -705,8 +705,6 @@ function setDesignMode(on) {
   if (pane && workspace && pane.parentElement !== workspace) workspace.insertBefore(pane, resizer);
   if (arch && arch.parentElement !== document.body) document.body.appendChild(arch);
   if (typeof DesignGraph !== 'undefined') DesignGraph.close();
-  const focus = $('#arch-focus');
-  if (focus) { focus.textContent = 'Focus'; focus.classList.remove('on'); }
 }
 
 function openBrief(force) {
@@ -718,23 +716,6 @@ function openBrief(force) {
   if (brief) {
     brief.classList.toggle('on', on);
     brief.toggleAttribute('inert', !on);
-  }
-  const btn = $('#arch-brief');
-  if (btn) btn.classList.toggle('on', on);
-}
-
-function toggleDesignFocus() {
-  if (!document.body.classList.contains('mode-design')) return;
-  const on = !document.body.classList.contains('design-focus');
-  document.body.classList.toggle('design-focus', on);
-  const btn = $('#arch-focus');
-  if (btn) {
-    btn.textContent = on ? 'Exit focus' : 'Focus';
-    btn.classList.toggle('on', on);
-  }
-  if (on) {
-    openBrief(false);
-    if (typeof DesignGraph !== 'undefined') DesignGraph.toggleInspector(false);
   }
 }
 
@@ -753,7 +734,7 @@ function openDesignStage(item) {
     const title = $('#design-empty-title');
     if (title) title.textContent = item.title;
   }
-  openBrief(true);
+  openBrief(false);
 }
 
 function bindDesignChrome() {
@@ -785,16 +766,117 @@ function bindDesignChrome() {
       if (id) open(id);
     });
   }
-  const brief = $('#arch-brief');
-  if (brief) brief.addEventListener('click', () => openBrief());
-  const focus = $('#arch-focus');
-  if (focus) focus.addEventListener('click', toggleDesignFocus);
   const close = $('#design-brief-close');
   if (close) close.addEventListener('click', () => openBrief(false));
   const scrim = $('#design-scrim');
   if (scrim) scrim.addEventListener('click', () => openBrief(false));
   const emptyBrief = $('#design-empty-brief');
   if (emptyBrief) emptyBrief.addEventListener('click', () => openBrief(true));
+  const emptyStart = $('#design-empty-start');
+  if (emptyStart) emptyStart.addEventListener('click', () => DesignStudy.focusAnswer());
+}
+
+/* ------------------------------------------------------------
+   Ask AI side chat: what the AI sees about the current task
+   ------------------------------------------------------------ */
+function chatSuggestions(item, isDesign, focus) {
+  if (!isDesign) {
+    const failing = state.lastResults && !lastRunPassed(item);
+    return [
+      failing ? 'Why is my code failing the tests?' : 'Explain the problem with a tiny example',
+      'Which pattern or data structure fits this problem, and why?',
+      'What is the time and space complexity of my current code?',
+      'What follow-up questions would an interviewer ask here?'
+    ];
+  }
+  if (item.noFramework) {
+    return ['What is this question really testing?', 'Help me pick the right story for this', 'Critique my answer as a hiring manager', 'What follow-ups should I expect?'];
+  }
+  if (focus && focus.type === 'node') {
+    return [`Why does this design need the ${focus.label}?`, `What happens if the ${focus.label} fails?`, `What are the alternatives to the ${focus.label}?`, 'Explain it like I am new to system design'];
+  }
+  if (focus && focus.type === 'flow') {
+    return [`Walk me through "${focus.label}" step by step`, 'Which hops add the most latency?', 'Why are some of these hops async?'];
+  }
+  if (focus && focus.type === 'failure') {
+    return ['How would I detect this in production?', 'How should the system degrade here?', 'What would the interviewer ask next about this failure?'];
+  }
+  if (focus && focus.type === 'edge') {
+    return [`Why is ${focus.label} designed this way?`, 'What if this call were the other kind (sync vs async)?'];
+  }
+  return ['What is this question really testing?', 'What clarifying questions should I ask first?', 'Review what I have written so far', 'What will the interviewer push on?'];
+}
+
+function chatContextProvider() {
+  const item = state.active;
+  if (!item) return null;
+  const isDesign = !ALL_CODING.includes(item);
+  const focus = isDesign && typeof DesignGraph !== 'undefined' && DesignGraph.isInline() ? DesignGraph.getFocus() : null;
+  const context = {
+    page: isDesign ? 'design' : 'coding',
+    question: {
+      title: item.title,
+      kind: isDesign ? (item.noFramework ? 'behavioral' : 'system design') : 'coding',
+      level: item.level,
+      seniority: item.seniority || 'N/A',
+      prompt: item.prompt,
+      topics: item.topics || []
+    },
+    notes: state.notes[item.id] || ''
+  };
+  if (isDesign) {
+    const study = typeof DesignStudy !== 'undefined' ? DesignStudy.chatContext() : null;
+    context.design = {
+      map: study ? study.map : '',
+      stage: study ? study.stage : '',
+      worksheet: study ? study.worksheet : '',
+      focus: focus ? focus.text : ''
+    };
+  } else {
+    context.code = ed.value;
+    context.language = 'JavaScript';
+    const res = state.lastResults;
+    if (res) {
+      const results = res.results || [];
+      const failed = (item.tests || []).map((t, i) => ({ t, r: results[i] })).filter(({ r }) => !r || !r.pass).slice(0, 3)
+        .map(({ t, r }) => `- ${t.input || 'case'}: expected ${fmt(t.expected)}, got ${r ? (r.error ? 'error ' + r.error : fmt(r.actual)) : 'not run'}`);
+      context.lastRun = `${results.filter((r) => r.pass).length}/${(item.tests || []).length} passing${res.fatal ? ' | ' + res.fatal : ''}\n${failed.join('\n')}`;
+    }
+  }
+  return {
+    key: item.id,
+    label: item.title,
+    focusLabel: focus ? focus.label : '',
+    page: context.page,
+    context,
+    suggestions: chatSuggestions(item, isDesign, focus)
+  };
+}
+
+function openHelp() {
+  $('#plan-title').textContent = 'How this app works';
+  $('#plan-body').innerHTML = `
+    <div class="help-grid">
+      <div class="help-card"><b>1 · Pick a page</b><p><b>Algorithm</b> is a coding IDE with tests. <b>System Design</b> is where you design systems and study architectures.</p></div>
+      <div class="help-card"><b>2 · Read what is asked</b><p>Every design question opens with a plain-language task and concrete examples, so you know exactly what to build.</p></div>
+      <div class="help-card"><b>3 · Write your design</b><p>Type your answer in <b>Your design</b> on the right, one step at a time: requirements, estimates, boxes and arrows, deep dive, failures. It saves automatically.</p></div>
+      <div class="help-card"><b>4 · Get evaluated</b><p>Press <b>Evaluate my design</b>. The AI scores each area, lists gaps, and gives the follow-ups an interviewer would ask.</p></div>
+      <div class="help-card"><b>5 · Compare and learn</b><p>Open <b>② Map</b>. Switch to <b>User actions</b> to see every request hop by hop, click any box to learn what it does, why, trade-offs, and who uses it. <b>Learn</b> lists every concept.</p></div>
+      <div class="help-card"><b>6 · Ask follow-ups</b><p><b>✦ Ask AI</b> (⌘J) opens a side chat that already knows your question, your work, and what you are looking at.</p></div>
+    </div>
+    <div class="section-h">Canvas shapes</div>
+    <div class="shape-key">${Object.keys(SHAPE_INFO).map((s) => `<span>${DesignGraph.shapeIcon(s)}${esc(SHAPE_INFO[s].label)}</span>`).join('')}</div>
+    <div class="section-h">Keyboard</div>
+    <table class="num-table">
+      <tr><td>⌘J / Ctrl+J</td><td>Open or close Ask AI</td></tr>
+      <tr><td>/</td><td>Jump to the Ask AI input</td></tr>
+      <tr><td>P</td><td>Switch the map between Components and User actions</td></tr>
+      <tr><td>E</td><td>Expand the canvas</td></tr>
+      <tr><td>⌘↵</td><td>Run tests (coding page)</td></tr>
+      <tr><td>⌘H</td><td>AI hint (coding page)</td></tr>
+      <tr><td>j / k</td><td>Next / previous coding question</td></tr>
+    </table>`;
+  $('#plan-modal').classList.add('on');
 }
 
 function open(id) {
@@ -849,22 +931,30 @@ function open(id) {
   const isCoding = !isDesign;
   $('#btn-run').style.display = isCoding ? '' : 'none';
   $('#btn-run-2').style.display = isCoding ? '' : 'none';
-  $('#btn-reset').style.display = isCoding ? '' : 'none';
   $('#btn-done').textContent = state.done.has(id) ? 'Done ✓' : 'Mark done';
   $('#btn-done').classList.toggle('primary', !state.done.has(id));
 
   renderTabs();
   renderDoc();
-  if (isDesign) openDesignStage(item);
+  if (isDesign) {
+    openDesignStage(item);
+    if (typeof DesignStudy !== 'undefined') DesignStudy.open(item);
+  } else if (typeof DesignStudy !== 'undefined') {
+    DesignStudy.close();
+  }
   if (isCoding) restoreRun(item);
   if (state.aiOpen && !isDesign) renderAIHint();
   if (isCoding) ed.focus();
+  if (typeof AIChat !== 'undefined') AIChat.refresh();
 }
 
 function renderTabs() {
+  // on the design page the answer lives in the "Your design" panel, so the brief has no separate Notes tab
+  const isDesign = state.active && !ALL_CODING.includes(state.active);
+  if (isDesign && state.tab === 'notes') state.tab = 'prompt';
   $('#tabs').innerHTML = [
     `<button class="tab ${state.tab === 'prompt' ? 'on' : ''}" data-tab="prompt">Question</button>`,
-    `<button class="tab ${state.tab === 'notes' ? 'on' : ''}" data-tab="notes">Notes</button>`
+    isDesign ? '' : `<button class="tab ${state.tab === 'notes' ? 'on' : ''}" data-tab="notes">Notes</button>`
   ].join('');
 }
 
@@ -2061,17 +2151,61 @@ function toggleDone() {
    ------------------------------------------------------------ */
 $('#btn-run').addEventListener('click', runTests);
 $('#btn-done').addEventListener('click', toggleDone);
-$('#btn-reset').addEventListener('click', () => {
-  if (!state.active) return;
-  if (!confirm('Reset this file to the starter code? Your draft will be lost.')) return;
-  store.set(KEYS.draft(state.active.id), null);
-  loadCode(state.active);
+/** Starts the current problem over: every saved artifact for this question is cleared. */
+function resetProblem() {
+  const item = state.active;
+  if (!item) return;
+  const id = item.id;
+  const isDesign = !ALL_CODING.includes(item);
+  const what = isDesign
+    ? 'your written design, the AI evaluation, practice progress, notes, the Ask AI conversation, and the done mark'
+    : 'your code (back to the starter), test runs, AI hints, review and solution, notes, the Ask AI conversation, and the done mark';
+  if (!confirm(`Reset “${item.title}”?\n\nThis clears ${what} for this question only.`)) return;
+
+  [KEYS.draft(id), KEYS.run(id), KEYS.ai(id), KEYS.review(id), KEYS.solve(id),
+    'gs.chat.' + id, 'gs.study.' + id, 'gs.design.eval.' + id, 'gs.quiz.' + id].forEach((k) => store.remove(k));
+  store.set(KEYS.runs, store.get(KEYS.runs, []).filter((r) => r && r.id !== id));
+  delete state.notes[id];
+  store.set(KEYS.notes, state.notes);
+  const legacy = store.get('gs.notes', {});
+  if (legacy && legacy[id]) { delete legacy[id]; store.set('gs.notes', legacy); }
+  if (state.done.has(id)) {
+    state.done.delete(id);
+    store.set(KEYS.done, [...state.done]);
+  }
+  if (typeof AIChat !== 'undefined') AIChat.forget(id);
+  state.savedRun = null;
   $('#results').classList.add('hidden');
-  state.lastResults = null;
-  syncGutter();
-  setStatus('');
-  toast('Starter restored');
-});
+  open(id);
+  renderSidebar();
+  renderQueue();
+  renderDesignSidebar();
+  updateProgress();
+  toast('Problem reset');
+}
+
+$('#btn-reset').addEventListener('click', resetProblem);
+
+const moreMenu = $('#more-menu');
+if (moreMenu) {
+  const setMore = (on) => {
+    moreMenu.classList.toggle('open', on);
+    $('#btn-more').setAttribute('aria-expanded', on ? 'true' : 'false');
+  };
+  $('#btn-more').addEventListener('click', (e) => { e.stopPropagation(); setMore(!moreMenu.classList.contains('open')); });
+  $('#more-list').addEventListener('click', () => setMore(false));
+  document.addEventListener('click', (e) => { if (!moreMenu.contains(e.target)) setMore(false); });
+}
+
+const sidebarBtn = $('#btn-sidebar');
+function setSidebarHidden(on) {
+  document.body.classList.toggle('sidebar-hidden', on);
+  store.set('gs.sidebar.hidden', on);
+  if (sidebarBtn) sidebarBtn.classList.toggle('on', on);
+  window.dispatchEvent(new Event('resize'));
+}
+if (sidebarBtn) sidebarBtn.addEventListener('click', () => setSidebarHidden(!document.body.classList.contains('sidebar-hidden')));
+if (store.get('gs.sidebar.hidden', false)) setSidebarHidden(true);
 
 $('#btn-notes').addEventListener('click', () => { state.tab = 'notes'; renderTabs(); renderDoc(); });
 $('#btn-hint').addEventListener('click', toggleAIPane);
@@ -2106,6 +2240,7 @@ function openPlan() {
   ].join('');
 
   $('#plan-body').innerHTML = body;
+  $('#plan-title').textContent = 'Bring-up plan';
   $('#plan-modal').classList.add('on');
 }
 
@@ -2295,6 +2430,7 @@ function applyLayout() {
     root.style.setProperty('--ai-w', Math.round(layout.ai) + 'px');
   }
   state.aiOpen = !!layout.aiOpen;
+  document.body.classList.toggle('ai-hint-open', !!layout.aiOpen && !isNarrowAI());
   const hintBtn = $('#btn-hint');
   if (hintBtn) hintBtn.classList.toggle('on', !!layout.aiOpen && !isNarrowAI());
 }
@@ -2432,16 +2568,17 @@ window.addEventListener('resize', applyLayout);
    Keyboard shortcuts
    ------------------------------------------------------------ */
 document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'j') {
+    e.preventDefault();
+    AIChat.toggle();
+    return;
+  }
   if (e.key === 'Escape') {
     const plan = $('#plan-modal');
     const graph = $('#graph-modal');
     if ((plan && plan.classList.contains('on')) || (graph && graph.classList.contains('on'))) {
       if (plan) plan.classList.remove('on');
       if (graph) graph.classList.remove('on');
-      return;
-    }
-    if (document.body.classList.contains('design-focus')) {
-      toggleDesignFocus();
       return;
     }
     const stage = $('#design-stage');
@@ -2457,7 +2594,15 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (document.activeElement === ed) return;
+  const typing = e.target && (e.target.closest('input, textarea, select, [contenteditable="true"]'));
+  if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === '/') { e.preventDefault(); AIChat.open(); return; }
   if (e.key === '?') { openPlan(); return; }
+  if (document.body.classList.contains('mode-design') && typeof DesignGraph !== 'undefined' && DesignGraph.getGraph()
+      && DesignGraph.isInline() && DesignStudy.isMapShown()) {
+    if (e.key === 'p' || e.key === 'P') { DesignGraph.setLayout(DesignGraph.layout() === 'paths' ? 'layers' : 'paths'); return; }
+    if (e.key === 'e' || e.key === 'E') { DesignGraph.setExpanded(); return; }
+  }
   const idx = ALL_CODING.findIndex((q) => state.active && q.id === state.active.id);
   if (e.key === 'j' && idx >= 0) open(ALL_CODING[Math.min(idx + 1, ALL_CODING.length - 1)].id);
   if (e.key === 'k' && idx > 0) open(ALL_CODING[idx - 1].id);
@@ -2468,6 +2613,15 @@ document.addEventListener('keydown', (e) => {
    ------------------------------------------------------------ */
 function boot() {
   bindDesignChrome();
+  AIChat.setContextProvider(chatContextProvider);
+  AIChat.init();
+  DesignGraph.onChange(() => AIChat.refresh());
+  const help = $('#btn-help');
+  if (help) help.addEventListener('click', openHelp);
+  if (!store.get('gs.help.seen', false)) {
+    store.set('gs.help.seen', true);
+    setTimeout(openHelp, 400);
+  }
   state.queue = state.queue.filter((id) => {
     const item = byId(id);
     return item && ALL_CODING.includes(item);

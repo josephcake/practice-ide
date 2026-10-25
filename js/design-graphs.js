@@ -1,7 +1,7 @@
 /* ============================================================
    SYSTEM DESIGN — interactive architecture maps
    Each graph is a layered architecture: components, flows,
-   failure drills, and the reasoning for why the design works.
+   what each component prevents, and the reasoning for why the design works.
    ============================================================ */
 
 const DESIGN_GRAPHS = {
@@ -433,7 +433,7 @@ const DESIGN_GRAPHS = {
 
 /* ============================================================
    Renderer — layered SVG, pan/zoom, node inspector, request
-   trace, and failure drills. No external dependencies.
+   trace, and per-component risk notes. No external dependencies.
    ============================================================ */
 
 const DesignGraph = (() => {
@@ -445,10 +445,11 @@ const DesignGraph = (() => {
   const NH = 56, TOP = 104, LEFT = 40;
 
   const state = {
-    id: null, g: null, selected: null, selectedEdge: null, failure: null,
+    id: null, g: null, selected: null, selectedEdge: null,
     tab: 'inspect', view: { x: 0, y: 0, w: 1, h: 1 }, target: { x: 0, y: 0, w: 1, h: 1 }, W: 1, H: 1,
     flow: -1, timer: null, panning: false, last: null, inline: false,
-    raf: null, smooth: 80
+    raf: null, smooth: 80,
+    layout: (() => { try { return JSON.parse(localStorage.getItem('gs.arch.layout')) === 'paths' ? 'paths' : 'layers'; } catch (e) { return 'layers'; } })()
   };
 
   const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => (
@@ -460,9 +461,18 @@ const DesignGraph = (() => {
   };
   const colorFor = (layer) => COLORS[layer] || '#9aa8bd';
 
-  let modal, svg, panel, legend, failureSelect, flowbar, narration, stepLabel, traceBtn;
+  let modal, svg, panel, legend;
   let nodeMap = new Map();
   let edgesByNode = new Map();
+  const listeners = [];
+  const emit = () => listeners.forEach((fn) => { try { fn(getFocus()); } catch (e) { /* listener bug */ } });
+  const link = (text) => (typeof ConceptLib !== 'undefined' ? ConceptLib.linkTerms(esc(text)) : esc(text));
+  const nodeLabel = (id) => (nodeMap.get(id) ? nodeMap.get(id).label : id);
+  const KIND_MEANING = {
+    sync: 'Synchronous: the caller waits for the answer before it can continue. Adds directly to user-facing latency.',
+    async: 'Asynchronous: the caller hands off work (usually through a queue or log) and moves on. Decouples speed and failures.',
+    obs: 'Telemetry: metrics, logs, or traces. Never on the user path, but how you find out something is wrong.'
+  };
 
   function byId(id) { return document.getElementById(id); }
 
@@ -472,38 +482,66 @@ const DesignGraph = (() => {
     svg = byId('arch-svg');
     panel = byId('arch-panel');
     legend = byId('arch-legend');
-    failureSelect = byId('arch-failure');
-    flowbar = byId('arch-flowbar');
-    narration = byId('arch-narration');
-    stepLabel = byId('arch-step');
-    traceBtn = byId('arch-trace');
 
     byId('arch-close').addEventListener('click', close);
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
     byId('arch-zoom-in').addEventListener('click', () => zoomCenter(0.82));
     byId('arch-zoom-out').addEventListener('click', () => zoomCenter(1.22));
     byId('arch-reset').addEventListener('click', () => resetView());
-    byId('arch-inspector').addEventListener('click', () => toggleInspector());
-    byId('arch-side-close').addEventListener('click', () => showInspector(false));
-    failureSelect.addEventListener('change', onFailure);
-    byId('arch-paths').addEventListener('click', (event) => {
-      const step = event.target.closest('[data-flow]');
-      if (step) startFlowAt(Number(step.dataset.flow));
+    const inspBtn = byId('arch-inspector');
+    if (inspBtn) inspBtn.addEventListener('click', () => toggleInspector());
+    const sideClose = byId('arch-side-close');
+    if (sideClose) sideClose.addEventListener('click', () => showInspector(false));
+    const layoutSeg = byId('arch-layout');
+    if (layoutSeg) layoutSeg.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-layout]');
+      if (btn) setLayout(btn.dataset.layout);
     });
-    traceBtn.addEventListener('click', toggleTrace);
-    byId('arch-prev').addEventListener('click', () => stepTrace(-1));
-    byId('arch-next').addEventListener('click', () => stepTrace(1));
-    byId('arch-play').addEventListener('click', togglePlay);
+    const expandBtn = byId('arch-expand');
+    if (expandBtn) expandBtn.addEventListener('click', () => setExpanded());
 
     document.querySelectorAll('#arch-modal [data-atab]').forEach((btn) => {
       btn.addEventListener('click', () => setTab(btn.dataset.atab));
     });
 
+    panel.addEventListener('click', (event) => {
+      const go = event.target.closest('[data-go]');
+      if (go) {
+        const [kind, value] = go.dataset.go.split(':');
+        if (kind === 'node') selectNode(value);
+        if (kind === 'edge') selectEdge(Number(value));
+        if (kind === 'flow') startFlowAt(Number(value));
+        return;
+      }
+      const ask = event.target.closest('[data-ask]');
+      if (ask && typeof AIChat !== 'undefined') AIChat.ask(ask.dataset.ask);
+    });
+
     svg.addEventListener('click', (event) => {
+      const title = event.target.closest('[data-flow-title]');
+      if (title) {
+        const row = Number(title.dataset.flowTitle);
+        if (state.flow === row) clearFocus(); else startFlowAt(row);
+        return;
+      }
       const node = event.target.closest('[data-node]');
-      if (node) { selectNode(node.dataset.node); return; }
+      if (node) { selectNode(node.dataset.node); showQuick(event, quickNodeHTML(node.dataset.node)); return; }
       const edge = event.target.closest('[data-edge]');
-      if (edge) selectEdge(Number(edge.dataset.edge));
+      if (edge) { selectEdge(Number(edge.dataset.edge)); showQuick(event, quickEdgeHTML(Number(edge.dataset.edge))); return; }
+      const down = state.downAt;
+      const dragged = down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > 4;
+      if (!dragged && hasFocus()) clearFocus();
+      else hideQuick();
+    });
+    const canvas = svg.parentElement;
+    canvas.addEventListener('click', (event) => {
+      const card = event.target.closest('.arch-quick');
+      if (!card) return;
+      event.stopPropagation();
+      if (event.target.closest('[data-quick="details"]')) { hideQuick(); if (typeof DesignStudy !== 'undefined') DesignStudy.showInspect(); }
+      if (event.target.closest('[data-quick="close"]')) hideQuick();
+      const ask = event.target.closest('[data-ask]');
+      if (ask && typeof AIChat !== 'undefined') { hideQuick(); AIChat.ask(ask.dataset.ask); }
     });
 
     svg.addEventListener('wheel', (event) => {
@@ -517,7 +555,9 @@ const DesignGraph = (() => {
     }, { passive: false });
 
     svg.addEventListener('pointerdown', (event) => {
+      state.downAt = { x: event.clientX, y: event.clientY };
       if (event.target.closest('[data-node]') || event.target.closest('[data-edge]')) return;
+      hideQuick();
       state.panning = true;
       state.last = { x: event.clientX, y: event.clientY };
       svg.classList.add('dragging');
@@ -538,7 +578,10 @@ const DesignGraph = (() => {
     svg.addEventListener('pointercancel', endPan);
 
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && modal.classList.contains('on')) close();
+      if (event.key !== 'Escape') return;
+      if (quickEl && quickEl.classList.contains('on')) { event.stopImmediatePropagation(); hideQuick(); return; }
+      if (modal.classList.contains('expanded')) { event.stopImmediatePropagation(); setExpanded(false); return; }
+      if (modal.classList.contains('on')) close();
     });
   }
 
@@ -547,14 +590,12 @@ const DesignGraph = (() => {
     if (!graph || !modal) return;
     const inline = !!(options && options.inline);
     state.inline = inline;
-    stopPlay();
     if (state.raf) cancelAnimationFrame(state.raf);
     state.raf = null;
     state.id = id;
     state.g = graph;
     state.selected = null;
     state.selectedEdge = null;
-    state.failure = null;
     state.flow = -1;
     nodeMap = new Map(graph.nodes.map((node) => [node.id, node]));
     edgesByNode = new Map();
@@ -567,58 +608,47 @@ const DesignGraph = (() => {
     byId('arch-title').textContent = graph.title;
     byId('arch-sub').textContent = graph.subtitle;
     buildLegend();
-    buildFailures();
-    buildPaths();
-    renderSVG();
+    render();
     resetView(true);
     setTab('inspect');
-    byId('arch-step').textContent = '—';
-    narration.textContent = 'Pick a step, or press Trace request.';
-    traceBtn.textContent = 'Trace request';
     showInspector(false);
     modal.classList.toggle('inline', inline);
     modal.classList.toggle('on', !inline);
     document.body.classList.toggle('modal-open', !inline);
     if (!inline) byId('arch-close').focus();
+    emit();
   }
 
   function close() {
     if (!modal) return;
-    stopPlay();
     if (state.raf) cancelAnimationFrame(state.raf);
     state.raf = null;
-    modal.classList.remove('on', 'inline', 'inspector-open');
+    modal.classList.remove('on', 'inline', 'inspector-open', 'expanded');
+    document.body.classList.remove('arch-expanded');
     document.body.classList.remove('modal-open');
     state.flow = -1;
     state.inline = false;
   }
 
+  function shapeIcon(shape) {
+    const w = 22, h = 14;
+    return `<svg class="legend-shape shape-${shape}" width="${w}" height="${h}" viewBox="-1 -1 ${w + 2} ${h + 2}" aria-hidden="true">${
+      shapeOutline(shape, w, h).replace(/ rx="(\d+(\.\d+)?)"/g, (m, v) => ` rx="${Math.min(Number(v), h / 2)}"`)
+    }</svg>`;
+  }
+
   function buildLegend() {
-    const layers = state.g.layers.map((layer) => (
-      `<span class="arch-legend-item"><i style="background:${colorFor(layer)}"></i>${esc(layer)}</span>`
-    )).join('');
-    legend.innerHTML = layers
+    const shapes = [...new Set(state.g.nodes.map((node) => shapeOf(node)))];
+    const order = ['client', 'edge', 'service', 'queue', 'cache', 'db', 'external', 'obs'];
+    const label = (s) => (typeof SHAPE_INFO !== 'undefined' && SHAPE_INFO[s] ? SHAPE_INFO[s].label : s);
+    legend.innerHTML = order.filter((s) => shapes.includes(s)).map((s) => (
+      `<span class="arch-legend-item shape">${shapeIcon(s)}${esc(label(s))}</span>`
+    )).join('')
       + '<span class="arch-legend-sep"></span>'
       + '<span class="arch-edge-key"><i class="arch-key-dot sync"></i>sync</span>'
       + '<span class="arch-edge-key"><i class="arch-key-dot async"></i>async</span>'
       + '<span class="arch-edge-key"><i class="arch-key-dot obs"></i>telemetry</span>'
       + '<span class="arch-edge-key"><i class="arch-key-dot return"></i>return</span>';
-  }
-
-  function buildFailures() {
-    const failures = state.g.failures || [];
-    failureSelect.innerHTML = '<option value="">Failure drill</option>' + failures.map((failure, index) => (
-      `<option value="${index}">${esc(failure.label)}</option>`
-    )).join('');
-    failureSelect.disabled = !failures.length;
-  }
-
-  function buildPaths() {
-    byId('arch-paths').innerHTML = state.g.flow.map((step, index) => (
-      `<button class="arch-path-step" data-flow="${index}" title="${esc(step.detail)}">
-        <span class="n">${index + 1}</span><span>${esc(step.title)}</span>
-      </button>`
-    )).join('');
   }
 
   function layout() {
@@ -643,13 +673,8 @@ const DesignGraph = (() => {
     return { positions, W, H, rows, nw, nh: NH, labelMax, subMax, colw, rowh };
   }
 
-  function renderSVG() {
-    const graph = state.g;
-    const { positions, W, H, nw, nh, labelMax, subMax, colw } = layout();
-    state.W = W;
-    state.H = H;
-
-    const defs = `<defs>
+  function svgDefs() {
+    return `<defs>
       <marker id="arch-arrow-sync" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
         <path d="M 0 0 L 10 5 L 0 10 z" fill="#5f9fe8"></path>
       </marker>
@@ -663,6 +688,15 @@ const DesignGraph = (() => {
         <path d="M 0 0 L 10 5 L 0 10 z" fill="#7ee0c2"></path>
       </marker>
     </defs>`;
+  }
+
+  function renderSVG() {
+    const graph = state.g;
+    const { positions, W, H, nw, nh, labelMax, subMax, colw } = layout();
+    state.W = W;
+    state.H = H;
+
+    const defs = svgDefs();
 
     const layers = graph.layers.map((layer, i) => {
       const x = LEFT + i * colw + nw / 2;
@@ -710,21 +744,190 @@ const DesignGraph = (() => {
 
     const nodeMarkup = graph.nodes.map((node) => {
       const pos = positions.get(node.id);
-      if (!pos) return '';
-      const color = colorFor(node.layer);
-      return `<g class="arch-node" data-node="${esc(node.id)}" transform="translate(${pos.x},${pos.y})">
-        <rect class="arch-node-box" width="${nw}" height="${nh}" rx="9" stroke="${color}" stroke-opacity=".5"></rect>
-        <rect class="arch-node-bar" width="4" height="${nh}" rx="2" fill="${color}"></rect>
-        <text class="arch-node-label" x="13" y="23">${esc(cut(node.label, labelMax))}</text>
-        <text class="arch-node-sub" x="13" y="41">${esc(cut(node.sub, subMax))}</text>
-        <title>${esc(node.detail)}</title>
-      </g>`;
+      return pos ? nodeShape(node, pos.x, pos.y, nw, nh, labelMax, subMax) : '';
     }).join('');
 
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('preserveAspectRatio', 'xMidYMin meet');
     svg.innerHTML = defs + layers + edgeMarkup + nodeMarkup;
     clearHighlights();
+  }
+
+  const SHAPE_BADGE = { client: 'USER', edge: 'EDGE', service: 'SERVICE', queue: 'QUEUE', db: 'DATABASE', cache: 'CACHE', external: 'EXTERNAL', obs: 'MONITOR' };
+
+  function shapeOf(node) {
+    return typeof ConceptLib !== 'undefined' ? ConceptLib.shapeFor(node) : 'service';
+  }
+
+  /** Outline path for each component type, so a store never looks like a service. */
+  function shapeOutline(shape, w, h) {
+    const r = 7;
+    switch (shape) {
+      case 'client':
+        return `<rect class="arch-node-box" width="${w}" height="${h}" rx="${h / 2}"></rect>`;
+      case 'edge':
+        return `<path class="arch-node-box" d="M 12 0 H ${w - 12} L ${w} ${h / 2} L ${w - 12} ${h} H 12 L 0 ${h / 2} Z"></path>`;
+      case 'db':
+      case 'cache':
+        return `<path class="arch-node-box" d="M 0 ${r} A ${w / 2} ${r} 0 0 1 ${w} ${r} V ${h - r} A ${w / 2} ${r} 0 0 1 0 ${h - r} Z"></path>
+          <path class="arch-node-cap" d="M 0 ${r} A ${w / 2} ${r} 0 0 0 ${w} ${r}"></path>
+          ${shape === 'db' ? `<path class="arch-node-cap faint" d="M 0 ${r + 7} A ${w / 2} ${r} 0 0 0 ${w} ${r + 7}"></path>` : ''}`;
+      case 'queue':
+        return `<rect class="arch-node-box" width="${w}" height="${h}" rx="4"></rect>
+          ${[0, 1, 2].map((i) => `<line class="arch-node-slot" x1="${w - 10 - i * 7}" y1="8" x2="${w - 10 - i * 7}" y2="${h - 8}"></line>`).join('')}`;
+      case 'external':
+        return `<rect class="arch-node-box dashed" width="${w}" height="${h}" rx="12"></rect>`;
+      case 'obs':
+        return `<rect class="arch-node-box dotted" width="${w}" height="${h}" rx="4"></rect>`;
+      default:
+        return `<rect class="arch-node-box" width="${w}" height="${h}" rx="6"></rect>
+          <rect class="arch-node-bar" width="4" height="${h}" rx="2"></rect>`;
+    }
+  }
+
+  function nodeShape(node, x, y, nw, nh, labelMax, subMax) {
+    const color = colorFor(node.layer);
+    const shape = shapeOf(node);
+    const cyl = shape === 'db' || shape === 'cache';
+    const pad = shape === 'edge' ? 16 : shape === 'client' ? 16 : 12;
+    const top = cyl ? 6 : 0;
+    const slots = shape === 'queue' ? 26 : 0;
+    const lmax = Math.max(8, labelMax - Math.round(slots / 7));
+    return `<g class="arch-node shape-${shape}" data-node="${esc(node.id)}" transform="translate(${x},${y})" style="--node-color:${color}">
+      ${shapeOutline(shape, nw, nh)}
+      <text class="arch-node-badge" x="${shape === 'queue' ? nw - 36 : nw - (shape === 'edge' ? 14 : 9)}" y="${11 + top}" text-anchor="end">${SHAPE_BADGE[shape] || ''}</text>
+      <text class="arch-node-label" x="${pad}" y="${25 + top}">${esc(cut(node.label, lmax))}</text>
+      <text class="arch-node-sub" x="${pad}" y="${42 + top}">${esc(cut(node.sub, subMax - Math.round(slots / 6)))}</text>
+      <title>${esc(node.label)} (${esc(SHAPE_BADGE[shape] || '').toLowerCase()}): ${esc(node.detail)}</title>
+    </g>`;
+  }
+
+  function packetMarkup(kind, pathId, distance, index) {
+    const duration = Math.min(5.4, Math.max(2.2, distance / 260)) + (kind === 'async' ? 0.7 : kind === 'obs' ? 1.5 : 0);
+    const begin = -((index * 0.43) % 4).toFixed(2);
+    const core = kind === 'sync'
+      ? '<circle class="packet-core" r="3.6"></circle>'
+      : kind === 'async'
+        ? '<rect class="packet-core" x="-3.5" y="-3.5" width="7" height="7" rx="1" transform="rotate(45)"></rect>'
+        : '<rect class="packet-core" x="-2.5" y="-2.5" width="5" height="5" rx="0.8"></rect>';
+    return `<g class="arch-packet ${kind}" aria-hidden="true">
+      <circle class="packet-halo" r="8"></circle>${core}
+      <animateMotion dur="${duration.toFixed(2)}s" begin="${begin}s" repeatCount="indefinite">
+        <mpath href="#${pathId}" xlink:href="#${pathId}"></mpath>
+      </animateMotion>
+    </g>`;
+  }
+
+  function isReturnEdge(edge) {
+    const t = nodeMap.get(edge.to);
+    return !!(t && (t.layer === 'Client' || t.layer === 'Consumers'));
+  }
+
+  /* ---------- Paths layout: one row per request path, every hop numbered ---------- */
+  function renderPathView() {
+    const graph = state.g;
+    const nw = 150, nh = NH, colw = 214, rowh = 168, left = 44, top = 64;
+    const labelMax = Math.floor((nw - 26) / 7.2), subMax = Math.floor((nw - 22) / 6.3);
+    let maxCols = 1;
+    const rows = graph.flow.map((step) => {
+      const order = [];
+      step.edges.forEach(([a, b]) => { if (!order.includes(a)) order.push(a); if (!order.includes(b)) order.push(b); });
+      step.nodes.forEach((id) => { if (!order.includes(id)) order.push(id); });
+      maxCols = Math.max(maxCols, order.length);
+      return order;
+    });
+    const W = left + maxCols * colw + 10;
+    const H = top + graph.flow.length * rowh + 10;
+    state.W = W;
+    state.H = H;
+
+    let body = '';
+    graph.flow.forEach((step, r) => {
+      const order = rows[r];
+      const y0 = top + r * rowh;
+      const pos = (id) => ({ x: left + order.indexOf(id) * colw, y: y0 + 34 });
+      let edgesSvg = '';
+      step.edges.forEach(([a, b], k) => {
+        const gi = graph.edges.findIndex((e) => e.from === a && e.to === b);
+        const edge = graph.edges[gi];
+        if (!edge) return;
+        const pa = pos(a), pb = pos(b);
+        const ia = order.indexOf(a), ib = order.indexOf(b);
+        const ret = isReturnEdge(edge);
+        let d, lx, ly;
+        if (ib === ia + 1) {
+          const x1 = pa.x + nw, x2 = pb.x, yy = pa.y + nh / 2 - 6 + (k % 2) * 4;
+          d = `M ${x1} ${yy} L ${x2} ${yy}`;
+          lx = (x1 + x2) / 2; ly = yy - 7;
+        } else if (ib > ia) {
+          const x1 = pa.x + nw / 2 + 14, x2 = pb.x + nw / 2 - 14, lift = 22 + (ib - ia) * 4;
+          d = `M ${x1} ${pa.y} C ${x1} ${pa.y - lift}, ${x2} ${pb.y - lift}, ${x2} ${pb.y}`;
+          lx = (x1 + x2) / 2; ly = pa.y - lift + 2;
+        } else {
+          const x1 = pa.x + nw / 2 - 14, x2 = pb.x + nw / 2 + 14, drop = 26 + (ia - ib) * 5;
+          d = `M ${x1} ${pa.y + nh} C ${x1} ${pa.y + nh + drop}, ${x2} ${pb.y + nh + drop}, ${x2} ${pb.y + nh}`;
+          lx = (x1 + x2) / 2; ly = pa.y + nh + drop - 2;
+        }
+        const pid = `arch-pp-${r}-${k}`;
+        edgesSvg += `<g class="arch-edge-group ${edge.kind}${ret ? ' return' : ''}" data-edge="${gi}">
+          <path id="${pid}" class="arch-edge ${edge.kind}${ret ? ' return' : ''}" d="${d}" marker-end="url(#arch-arrow-${ret ? 'return' : edge.kind})"></path>
+          <g class="hop-badge" transform="translate(${lx},${ly})"><circle r="8"></circle><text y="3.5" text-anchor="middle">${k + 1}</text></g>
+          <text class="arch-edge-label ${edge.kind}" x="${lx + 12}" y="${ly + 4}">${esc(edge.label)}</text>
+          ${packetMarkup(edge.kind, pid, 260, k)}
+          <title>${k + 1}. ${esc(nodeLabel(a))} → ${esc(nodeLabel(b))}: ${esc(edge.detail || edge.label)}</title>
+        </g>`;
+      });
+      const nodesSvg = order.map((id) => {
+        const node = nodeMap.get(id);
+        const p = pos(id);
+        return node ? nodeShape(node, p.x, p.y, nw, nh, labelMax, subMax) : '';
+      }).join('');
+      body += `<g class="path-row" data-row="${r}">
+        <rect class="path-row-bg" x="${left - 26}" y="${y0 - 8}" width="${W - left + 16}" height="${rowh - 14}" rx="10"></rect>
+        <text class="path-row-title" x="${left - 12}" y="${y0 + 12}" data-flow-title="${r}">${r + 1}. ${esc(step.title)}</text>
+        ${edgesSvg}${nodesSvg}
+      </g>`;
+    });
+
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('preserveAspectRatio', 'xMidYMin meet');
+    svg.innerHTML = svgDefs() + `<text class="arch-layer" x="${left - 12}" y="30" fill="#8fa3bf">USER ACTIONS, HOP BY HOP · numbers show the order · arcs below are responses · click a title to highlight it</text>` + body;
+    clearHighlights();
+  }
+
+  function render() {
+    hideQuick();
+    if (state.layout === 'paths') renderPathView();
+    else renderSVG();
+    const seg = byId('arch-layout');
+    if (seg) seg.querySelectorAll('[data-layout]').forEach((b) => b.classList.toggle('on', b.dataset.layout === state.layout));
+  }
+
+  function setLayout(layout) {
+    if (!state.g) return;
+    state.layout = layout === 'paths' ? 'paths' : 'layers';
+    try { localStorage.setItem('gs.arch.layout', JSON.stringify(state.layout)); } catch (e) { /* ignore */ }
+    const flow = state.flow, sel = state.selected, edge = state.selectedEdge;
+    render();
+    resetView(true);
+    if (flow >= 0) startFlowAt(flow);
+    else if (sel) selectNode(sel);
+    else if (edge != null) selectEdge(edge);
+  }
+
+  function setExpanded(on) {
+    if (!modal) return;
+    const next = typeof on === 'boolean' ? on : !modal.classList.contains('expanded');
+    modal.classList.toggle('expanded', next);
+    document.body.classList.toggle('arch-expanded', next);
+    const btn = byId('arch-expand');
+    if (btn) {
+      btn.classList.toggle('on', next);
+      btn.textContent = next ? '⤡' : '⤢';
+      btn.title = next ? 'Exit full screen (Esc)' : 'Expand canvas to full screen (E · Esc to exit)';
+      btn.setAttribute('aria-label', next ? 'Exit full screen' : 'Expand canvas');
+    }
+    requestAnimationFrame(() => resetView(true));
   }
 
   function svgPoint(event) {
@@ -828,6 +1031,7 @@ const DesignGraph = (() => {
     if (!svg) return;
     svg.querySelectorAll('[data-node]').forEach((el) => el.classList.remove('dim', 'hot', 'fail', 'warn', 'selected'));
     svg.querySelectorAll('.arch-edge-group').forEach((el) => el.classList.remove('dim', 'hot', 'fail', 'warn', 'flowing'));
+    svg.querySelectorAll('.path-row').forEach((el) => el.classList.remove('off'));
   }
 
   function focusNodes(nodeIds, edgeIndexes, mode) {
@@ -848,10 +1052,7 @@ const DesignGraph = (() => {
   }
 
   function selectNode(id) {
-    stopPlay();
     stopFlow();
-    state.failure = null;
-    failureSelect.value = '';
     state.selected = id;
     state.selectedEdge = null;
     const connected = edgesByNode.get(id) || [];
@@ -867,13 +1068,11 @@ const DesignGraph = (() => {
     setTab('inspect');
     renderInspector();
     showInspector(true);
+    emit();
   }
 
   function selectEdge(index) {
-    stopPlay();
     stopFlow();
-    state.failure = null;
-    failureSelect.value = '';
     const edge = state.g.edges[index];
     if (!edge) return;
     state.selected = null;
@@ -882,86 +1081,132 @@ const DesignGraph = (() => {
     setTab('inspect');
     renderInspector();
     showInspector(true);
+    emit();
   }
 
-  function onFailure() {
-    stopPlay();
+  /* ---------- quick card: a small answer on the canvas, no panel switch ---------- */
+  let quickEl = null;
+
+  function quickNodeHTML(id) {
+    const node = nodeMap.get(id);
+    if (!node) return '';
+    const shape = shapeOf(node);
+    const c = typeof ConceptLib !== 'undefined' ? ConceptLib.forNode(node) : null;
+    return `<div class="quick-kicker" style="color:${colorFor(node.layer)}">${esc(SHAPE_BADGE[shape] || '')}${c ? ' · ' + esc(c.name) : ''}</div>
+      <b>${esc(node.label)}</b><span class="quick-sub">${esc(node.sub)}</span>
+      <p>${link(node.detail)}</p>
+      ${riskHTML(node, true)}
+      <div class="quick-actions">
+        <button class="btn tiny" data-quick="details" type="button">Details</button>
+        <button class="btn tiny ask-ai-btn" data-ask="${esc(`In ${state.g.title}, what problem does the ${node.label} (${node.sub}) solve, and what would go wrong without it?`)}" type="button">✦ Ask</button>
+      </div>`;
+  }
+
+  function quickEdgeHTML(index) {
+    const e = state.g.edges[index];
+    if (!e) return '';
+    return `<div class="quick-kicker">${esc(e.kind === 'obs' ? 'TELEMETRY' : e.kind.toUpperCase())} · ${esc(e.label)}</div>
+      <b>${esc(nodeLabel(e.from))} → ${esc(nodeLabel(e.to))}</b>
+      <p>${link(e.detail || '')}</p>
+      <p class="quick-dim">${esc(KIND_MEANING[e.kind] || '')}</p>
+      <div class="quick-actions">
+        <button class="btn tiny" data-quick="details" type="button">Details</button>
+        <button class="btn tiny ask-ai-btn" data-ask="${esc(`In ${state.g.title}, why is the ${nodeLabel(e.from)} → ${nodeLabel(e.to)} call ${e.kind}?`)}" type="button">✦ Ask</button>
+      </div>`;
+  }
+
+  function showQuick(event, html) {
+    if (!html || !svg) return;
+    const canvas = svg.parentElement;
+    if (!quickEl) {
+      quickEl = document.createElement('div');
+      quickEl.className = 'arch-quick';
+      canvas.appendChild(quickEl);
+    }
+    quickEl.innerHTML = `<button class="quick-close" data-quick="close" type="button" aria-label="Close">✕</button>${html}`;
+    quickEl.classList.add('on');
+    const rect = canvas.getBoundingClientRect();
+    const w = quickEl.offsetWidth, h = quickEl.offsetHeight;
+    let x = event.clientX - rect.left + 14;
+    let y = event.clientY - rect.top + 14;
+    if (x + w > rect.width - 8) x = event.clientX - rect.left - w - 14;
+    if (y + h > rect.height - 8) y = Math.max(8, rect.height - h - 8);
+    quickEl.style.left = Math.max(8, x) + 'px';
+    quickEl.style.top = Math.max(8, y) + 'px';
+  }
+
+  function hideQuick() { if (quickEl) quickEl.classList.remove('on'); }
+
+  function hasFocus() {
+    return state.selected != null || state.selectedEdge != null || state.flow >= 0
+      || !!(svg && svg.querySelector('.dim'));
+  }
+
+  function clearFocus() {
+    hideQuick();
     stopFlow();
     state.selected = null;
     state.selectedEdge = null;
-    setTab('inspect');
-    const value = failureSelect.value;
-    state.failure = value === '' ? null : Number(value);
-    if (state.failure == null) {
-      clearHighlights();
-      renderInspector();
-      return;
-    }
-    const failure = state.g.failures[state.failure];
-    const failed = new Set(failure.nodes);
-    const affected = new Set(failure.affected || []);
-    const edges = state.g.edges.map((edge, index) => (
-      failed.has(edge.from) || failed.has(edge.to) || affected.has(edge.from) || affected.has(edge.to) ? index : -1
-    )).filter((index) => index >= 0);
+    clearHighlights();
+    renderInspector();
+    emit();
+  }
+
+  /** Highlights a set of nodes (e.g. components the candidate missed). */
+  function spotlight(ids) {
+    if (!state.g) return;
+    stopFlow();
+    state.selected = null;
+    state.selectedEdge = null;
+    const set = new Set(ids);
     clearHighlights();
     svg.querySelectorAll('[data-node]').forEach((el) => {
-      const id = el.dataset.node;
-      const isFail = failed.has(id);
-      const isWarn = affected.has(id);
-      el.classList.toggle('dim', !isFail && !isWarn);
-      if (isFail) el.classList.add('fail');
-      if (isWarn) el.classList.add('warn');
+      const on = set.has(el.dataset.node);
+      el.classList.toggle('dim', !on);
+      if (on) el.classList.add('warn');
     });
-    svg.querySelectorAll('.arch-edge-group').forEach((el) => {
-      const index = Number(el.dataset.edge);
-      const edge = state.g.edges[index];
-      const active = failed.has(edge.from) || failed.has(edge.to);
-      el.classList.toggle('dim', !edges.includes(index));
-      if (active) el.classList.add('fail');
-      else if (edges.includes(index)) el.classList.add('hot');
-    });
+    svg.querySelectorAll('.arch-edge-group').forEach((el) => el.classList.add('dim'));
     renderInspector();
-    showInspector(true);
+    emit();
   }
 
-  function toggleTrace() {
-    if (state.flow >= 0) {
-      stopPlay();
-      stopFlow();
-      clearHighlights();
-      renderInspector();
-      return;
+  function getFocus() {
+    const g = state.g;
+    if (!g) return null;
+    if (state.flow >= 0 && g.flow[state.flow]) {
+      const step = g.flow[state.flow];
+      const hops = step.edges.map(([a, b]) => `${nodeLabel(a)} → ${nodeLabel(b)}`).join('; ');
+      return { type: 'flow', index: state.flow, label: step.title, text: `Request path ${state.flow + 1} "${step.title}": ${step.detail} Hops: ${hops}` };
     }
-    startFlowAt(0);
+    if (state.selectedEdge != null && g.edges[state.selectedEdge]) {
+      const e = g.edges[state.selectedEdge];
+      const label = `${nodeLabel(e.from)} → ${nodeLabel(e.to)}`;
+      return { type: 'edge', index: state.selectedEdge, label, text: `Connection ${label} (${e.kind}, "${e.label}"): ${e.detail}` };
+    }
+    if (state.selected != null && nodeMap.get(state.selected)) {
+      const n = nodeMap.get(state.selected);
+      return { type: 'node', id: n.id, label: n.label, text: `Component "${n.label}" (${n.sub}, ${n.layer} layer): ${n.detail} ${(n.spec || []).join(' ')}` };
+    }
+    return null;
   }
+
 
   function startFlowAt(index) {
-    stopPlay();
-    state.failure = null;
-    failureSelect.value = '';
+    hideQuick();
     state.selected = null;
     state.selectedEdge = null;
     state.flow = Math.max(0, Math.min(state.g.flow.length - 1, index));
+    if (state.layout !== 'paths') {
+      state.layout = 'paths';
+      try { localStorage.setItem('gs.arch.layout', JSON.stringify('paths')); } catch (e) { /* ignore */ }
+      render();
+      resetView(true);
+    }
     applyFlow();
   }
 
   function stopFlow() {
     state.flow = -1;
-    if (stepLabel) stepLabel.textContent = '—';
-    if (narration) narration.textContent = 'Pick a step, or press Trace request.';
-    if (traceBtn) traceBtn.textContent = 'Trace request';
-    const paths = byId('arch-paths');
-    if (paths) paths.querySelectorAll('[data-flow]').forEach((el) => el.classList.remove('on'));
-  }
-
-  function stepTrace(delta) {
-    if (state.flow < 0) {
-      startFlowAt(0);
-      return;
-    }
-    const next = Math.max(0, Math.min(state.g.flow.length - 1, state.flow + delta));
-    state.flow = next;
-    applyFlow();
   }
 
   function applyFlow() {
@@ -971,38 +1216,11 @@ const DesignGraph = (() => {
       state.g.edges.findIndex((edge) => edge.from === from && edge.to === to)
     )).filter((index) => index >= 0);
     focusNodes(step.nodes, edges, 'flow');
-    stepLabel.textContent = `${state.flow + 1}/${state.g.flow.length}`;
-    narration.textContent = step.detail;
-    traceBtn.textContent = 'Stop trace';
-    byId('arch-paths').querySelectorAll('[data-flow]').forEach((el) => {
-      el.classList.toggle('on', Number(el.dataset.flow) === state.flow);
-    });
+    svg.querySelectorAll('.path-row').forEach((row) => row.classList.toggle('off', Number(row.dataset.row) !== state.flow));
     setTab('inspect');
     renderInspector();
-  }
-
-  function togglePlay() {
-    if (state.timer) {
-      stopPlay();
-      return;
-    }
-    if (state.flow < 0) startFlowAt(0);
-    byId('arch-play').textContent = '❚❚ Pause';
-    state.timer = setInterval(() => {
-      if (state.flow >= state.g.flow.length - 1) {
-        stopPlay();
-        return;
-      }
-      state.flow += 1;
-      applyFlow();
-    }, 2100);
-  }
-
-  function stopPlay() {
-    if (state.timer) clearInterval(state.timer);
-    state.timer = null;
-    const play = byId('arch-play');
-    if (play) play.textContent = '▶ Play';
+    showInspector(true);
+    emit();
   }
 
   function setTab(tab) {
@@ -1016,7 +1234,56 @@ const DesignGraph = (() => {
   }
 
   function listHTML(items) {
-    return `<ul class="arch-list">${(items || []).map((item) => `<li>${esc(item)}</li>`).join('')}</ul>`;
+    return `<ul class="arch-list">${(items || []).map((item) => `<li>${link(item)}</li>`).join('')}</ul>`;
+  }
+
+  /** What goes wrong without this component, and what happens if it breaks. Map-specific text wins. */
+  function riskFor(node) {
+    const c = typeof ConceptLib !== 'undefined' ? ConceptLib.forNode(node) : null;
+    const specific = (state.g.failures || []).find((f) => f.nodes.includes(node.id));
+    if (!c || (!c.without && !specific)) return null;
+    return {
+      without: c.without || '',
+      breaks: specific ? specific.detail : c.breaks || '',
+      protect: specific ? specific.mitigation : c.protect || '',
+      hits: specific ? (specific.affected || []).map(nodeLabel) : []
+    };
+  }
+
+  function riskHTML(node, compact) {
+    const r = riskFor(node);
+    if (!r) return '';
+    return `<div class="risk${compact ? ' compact' : ''}">
+      ${r.without ? `<div class="risk-row without"><span>Without it</span><p>${link(r.without)}</p></div>` : ''}
+      ${r.breaks ? `<div class="risk-row breaks"><span>If it breaks</span><p>${link(r.breaks)}</p>
+        ${!compact && r.hits.length ? `<p class="risk-hits">Hit hardest: ${esc(r.hits.join(', '))}</p>` : ''}
+        ${r.protect ? `<p class="risk-protect"><b>Protect it:</b> ${link(r.protect)}</p>` : ''}</div>` : ''}
+    </div>`;
+  }
+
+  /** The general building-block lesson behind a component: what, why, trade-offs, who uses it. */
+  function conceptCard(c) {
+    return `<div class="concept-card">
+      <div class="concept-head"><span class="concept-kicker">CONCEPT</span><b>${esc(c.name)}</b></div>
+      <div class="concept-row"><span>What it does</span><p>${esc(c.what)}</p></div>
+      <div class="concept-row"><span>Why it is used</span><p>${esc(c.why)}</p></div>
+      ${(c.tradeoffs || []).length ? `<div class="concept-row"><span>Trade-offs</span><ul>${c.tradeoffs.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}
+      ${(c.usedBy || []).length ? `<div class="concept-row"><span>Used by</span><div class="used-by">${c.usedBy.map((u) => `<i>${esc(u)}</i>`).join('')}</div></div>` : ''}
+      ${c.alt && c.alt !== '—' ? `<div class="concept-row"><span>Alternative</span><p>${esc(c.alt)}</p></div>` : ''}
+    </div>`;
+  }
+
+  const askBtn = (label, question) => `<button class="btn tiny ask-ai-btn" data-ask="${esc(question)}" type="button">✦ ${esc(label)}</button>`;
+
+  function hopRow(edgeIndex, n) {
+    const edge = state.g.edges[edgeIndex];
+    if (!edge) return '';
+    return `<li class="hop ${edge.kind}" data-go="edge:${edgeIndex}">
+      <span class="hop-n">${n}</span>
+      <span class="hop-body"><b>${esc(nodeLabel(edge.from))} → ${esc(nodeLabel(edge.to))}</b>
+      <span class="hop-kind">${esc(edge.kind)} · ${esc(edge.label)}</span>
+      <span class="hop-detail">${link(edge.detail || '')}</span></span>
+    </li>`;
   }
 
   function renderInspector() {
@@ -1027,48 +1294,43 @@ const DesignGraph = (() => {
       panel.innerHTML = `<div class="arch-panel-kicker">WHY IT WORKS</div>
         <h4>${esc(graph.title)}</h4>
         <p class="arch-panel-sub">${esc(graph.subtitle)}</p>
-        ${listHTML(graph.why)}`;
+        ${listHTML(graph.why)}
+        ${askBtn('Explain why this design works', `Explain in plain language why the ${graph.title} design works. Which requirement forces each key choice?`)}`;
       return;
     }
     if (state.tab === 'tradeoffs') {
       panel.innerHTML = `<div class="arch-panel-kicker">TRADE-OFFS</div>
         <h4>What you give up</h4>
         ${listHTML(graph.tradeoffs)}
-        <div class="arch-hint">Strong answers name the trade-off and the condition under which they would choose the other side.</div>`;
-      return;
-    }
-
-    if (state.failure != null) {
-      const failure = graph.failures[state.failure];
-      panel.innerHTML = `<div class="arch-panel-kicker danger">FAILURE DRILL</div>
-        <h4>${esc(failure.label)}</h4>
-        <p class="arch-panel-sub">${esc(failure.detail)}</p>
-        <div class="arch-panel-block"><span>Mitigation</span><p>${esc(failure.mitigation)}</p></div>
-        <div class="arch-tags">${failure.nodes.map((id) => `<span class="arch-tag fail">${esc(nodeMap.get(id)?.label || id)}</span>`).join('')}
-        ${(failure.affected || []).map((id) => `<span class="arch-tag warn">${esc(nodeMap.get(id)?.label || id)}</span>`).join('')}</div>
-        <div class="arch-hint">Select “Failure drill” again to clear it.</div>`;
+        <div class="arch-hint">Strong answers name the trade-off and the condition under which they would choose the other side.</div>
+        ${askBtn('Compare the options in a table', `For the ${graph.title} design, compare the main trade-offs in a small table: option, benefit, cost, when to choose it.`)}`;
       return;
     }
 
     if (state.flow >= 0) {
       const step = graph.flow[state.flow];
-      panel.innerHTML = `<div class="arch-panel-kicker">TRACE ${state.flow + 1}/${graph.flow.length}</div>
+      const edges = step.edges.map(([from, to]) => graph.edges.findIndex((e) => e.from === from && e.to === to)).filter((i) => i >= 0);
+      panel.innerHTML = `<div class="arch-panel-kicker">USER ACTION ${state.flow + 1}/${graph.flow.length}</div>
         <h4>${esc(step.title)}</h4>
-        <p class="arch-panel-sub">${esc(step.detail)}</p>
-        <div class="arch-tags">${step.nodes.map((id) => `<span class="arch-tag">${esc(nodeMap.get(id)?.label || id)}</span>`).join('')}</div>
-        <div class="arch-hint">Use ← / → or Play to walk the request through the system.</div>`;
+        <p class="arch-panel-sub">${link(step.detail)}</p>
+        <div class="arch-section-h">Hop by hop</div>
+        <ol class="hop-list">${edges.map((i, n) => hopRow(i, n + 1)).join('')}</ol>
+        ${askBtn('Walk me through this action', `Walk me through the "${step.title}" user action of ${graph.title} hop by hop. For each hop, say why it is sync or async and what latency it adds.`)}
+        <div class="arch-hint">Click a hop to inspect it · click empty canvas to clear.</div>`;
       return;
     }
 
     if (state.selectedEdge != null) {
       const edge = graph.edges[state.selectedEdge];
-      panel.innerHTML = `<div class="arch-panel-kicker">CONNECTION</div>
-        <h4>${esc(nodeMap.get(edge.from)?.label || edge.from)} → ${esc(nodeMap.get(edge.to)?.label || edge.to)}</h4>
-        <p class="arch-panel-sub">${esc(edge.detail || '')}</p>
+      panel.innerHTML = `<div class="arch-panel-kicker">CONNECTION · ${esc(edge.kind.toUpperCase())}</div>
+        <h4><button class="linklike" data-go="node:${esc(edge.from)}">${esc(nodeLabel(edge.from))}</button> → <button class="linklike" data-go="node:${esc(edge.to)}">${esc(nodeLabel(edge.to))}</button></h4>
+        <p class="arch-panel-body">${link(edge.detail || '')}</p>
         <div class="arch-defs">
-          <div><span>Flow</span><b>${esc(edge.label)}</b></div>
+          <div><span>Carries</span><b>${esc(edge.label)}</b></div>
           <div><span>Type</span><b>${esc(edge.kind)}</b></div>
-        </div>`;
+        </div>
+        <div class="arch-panel-block"><span>What ${esc(edge.kind)} means</span><p>${esc(KIND_MEANING[edge.kind] || '')}</p></div>
+        ${askBtn(`Why is this ${edge.kind}?`, `In ${graph.title}, why is the ${nodeLabel(edge.from)} → ${nodeLabel(edge.to)} connection ${edge.kind}? What would break or slow down if it were the other way?`)}`;
       return;
     }
 
@@ -1076,32 +1338,49 @@ const DesignGraph = (() => {
       const node = nodeMap.get(state.selected);
       if (!node) return;
       const color = colorFor(node.layer);
-      panel.innerHTML = `<div class="arch-panel-kicker" style="color:${color}">${esc(node.layer.toUpperCase())}</div>
+      const all = edgesByNode.get(node.id) || [];
+      const out = all.filter((i) => graph.edges[i].from === node.id);
+      const inc = all.filter((i) => graph.edges[i].to === node.id);
+      const connRow = (i, dir) => {
+        const e = graph.edges[i];
+        const other = dir === 'out' ? e.to : e.from;
+        return `<li data-go="edge:${i}"><span class="conn-dir">${dir === 'out' ? '→' : '←'}</span><b>${esc(nodeLabel(other))}</b><span class="hop-kind">${esc(e.kind)} · ${esc(e.label)}</span></li>`;
+      };
+      const flows = graph.flow.map((f, i) => (f.nodes.includes(node.id) ? i : -1)).filter((i) => i >= 0);
+      const concept = typeof ConceptLib !== 'undefined' ? ConceptLib.forNode(node) : null;
+      const shape = shapeOf(node);
+      panel.innerHTML = `<div class="arch-panel-kicker" style="color:${color}">${esc(SHAPE_BADGE[shape] || '')} · ${esc(node.layer.toUpperCase())} LAYER</div>
         <h4>${esc(node.label)}</h4>
         <p class="arch-panel-sub">${esc(node.sub)}</p>
-        <p class="arch-panel-body">${esc(node.detail)}</p>
+        <div class="arch-section-h">In this design</div>
+        <p class="arch-panel-body">${link(node.detail)}</p>
         ${listHTML(node.spec)}
-        <div class="arch-defs">
-          <div><span>Incoming</span><b>${edgeCount(node.id, 'in')}</b></div>
-          <div><span>Outgoing</span><b>${edgeCount(node.id, 'out')}</b></div>
+        ${riskHTML(node, false)}
+        ${concept ? conceptCard(concept) : ''}
+        ${out.length ? `<div class="arch-section-h">Sends to</div><ul class="conn-list">${out.map((i) => connRow(i, 'out')).join('')}</ul>` : ''}
+        ${inc.length ? `<div class="arch-section-h">Receives from</div><ul class="conn-list">${inc.map((i) => connRow(i, 'in')).join('')}</ul>` : ''}
+        ${flows.length ? `<div class="arch-section-h">Used in user actions</div><div class="arch-tags">${flows.map((i) => `<button class="arch-tag" data-go="flow:${i}">${i + 1}. ${esc(graph.flow[i].title)}</button>`).join('')}</div>` : ''}
+        <div class="ask-row">
+          ${askBtn('Why is this here?', `In ${graph.title}, what problem does the ${node.label} (${node.sub}) solve, and what would go wrong without it?`)}
+          ${askBtn('Alternatives?', `What are the alternatives to the ${node.label} (${node.sub}) in ${graph.title}, and when would I pick each one?`)}
         </div>`;
       return;
     }
 
-    panel.innerHTML = `<div class="arch-panel-kicker">INTERACTIVE MAP</div>
+    panel.innerHTML = `<div class="arch-panel-kicker">OVERVIEW</div>
       <h4>${esc(graph.title)}</h4>
       <p class="arch-panel-sub">${esc(graph.subtitle)}</p>
       <div class="arch-stats">
         <div><b>${graph.nodes.length}</b><span>components</span></div>
-        <div><b>${graph.layers.length}</b><span>layers</span></div>
-        <div><b>${graph.flow.length}</b><span>trace steps</span></div>
+        <div><b>${graph.flow.length}</b><span>user actions</span></div>
       </div>
-      <div class="arch-panel-block"><span>Start here</span><p>Press <b>Trace request</b> to animate the critical path, then click any component for its role, design choices, and failure behavior.</p></div>
-      <div class="arch-hint">Blue dots = sync · amber diamonds = async · gray squares = telemetry · mint = return to the user. Packets animate along each edge.<br>Scroll to zoom · drag to pan · click a node or connection.</div>`;
-  }
-
-  function edgeCount(id, direction) {
-    return state.g.edges.filter((edge) => (direction === 'in' ? edge.to === id : edge.from === id)).length;
+      <ol class="read-steps">
+        <li><b>Columns are layers.</b> Requests enter on the left (client) and go deeper to the right (services, queues, data).</li>
+        <li><b>Arrows are connections.</b> Solid blue = the caller waits (sync). Dashed amber = handed off to a queue (async). Mint = the answer going back to the user.</li>
+        <li><b>Switch to User actions</b> to see each thing a user does as its own row, hop by hop. Click a row title to highlight it.</li>
+        <li><b>Click any box</b> to see what it does, what goes wrong without it, and what happens if it breaks.</li>
+      </ol>
+      <div class="arch-hint">Scroll to zoom · drag to pan · click empty canvas to clear.</div>`;
   }
 
   init();
@@ -1110,6 +1389,22 @@ const DesignGraph = (() => {
     open,
     close,
     toggleInspector,
+    selectNode,
+    selectEdge,
+    startFlowAt,
+    clearFocus,
+    spotlight,
+    getFocus,
+    getGraph: () => state.g,
+    setLayout,
+    setExpanded,
+    conceptCard,
+    shapeIcon,
+    shapeOf,
+    layout: () => state.layout,
+    currentId: () => state.id,
+    isInline: () => !!state.inline,
+    onChange: (fn) => listeners.push(fn),
     has: (id) => !!DESIGN_GRAPHS[id]
   };
 })();
