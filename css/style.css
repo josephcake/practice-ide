@@ -2298,13 +2298,6 @@ body.sidebar-hidden .sidebar, body.sidebar-hidden #resize-sidebar { display: non
 .arch-node.selected.pulse .arch-node-box, .arch-node.hot.pulse .arch-node-box { animation: node-arrive .6s ease-out; }
 @media (prefers-reduced-motion: reduce) { .arch-node.pulse .arch-node-box { animation: none; } }
 
-/* Map view: more room for the canvas */
-body.map-wide:not(.sidebar-peek) .sidebar,
-body.map-wide:not(.sidebar-peek) #resize-sidebar { display: none; }
-body.map-wide:not(.sidebar-peek) .app { grid-template-columns: 0 0 minmax(0, 1fr); }
-body.map-wide.chat-open:not(.sidebar-peek) .app { grid-template-columns: 0 0 minmax(0, 1fr) 7px var(--chat-w, 380px); }
-body.map-wide #btn-sidebar { color: var(--dim-2); }
-body.map-wide.sidebar-peek #btn-sidebar { color: var(--text); }
 .study-pane { --study-w: 380px; }
 
 /* ============================================================

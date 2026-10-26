@@ -289,7 +289,6 @@ const DesignStudy = (() => {
       stage.classList.toggle('view-map', st.view === 'map');
     }
     document.body.classList.toggle('map-wide', st.view === 'map');
-    if (st.view !== 'map') document.body.classList.remove('sidebar-peek');
     document.querySelectorAll('#design-views [data-view]').forEach((b) => {
       const on = b.dataset.view === st.view;
       b.classList.toggle('on', on);
@@ -640,7 +639,7 @@ const DesignStudy = (() => {
     timer.running = false;
     const stage = document.getElementById('design-stage');
     if (stage) stage.classList.remove('view-brief', 'view-map');
-    document.body.classList.remove('map-wide', 'sidebar-peek');
+    document.body.classList.remove('map-wide');
     item = null;
   }
 
