@@ -12,7 +12,7 @@ const DESIGN_GRAPHS = {};
 
 const DesignGraph = (() => {
   const COLORS = {
-    Client: '#7ab8ff', Edge: '#d99bff', Service: '#2dd4bf', Async: '#f2c75e',
+    Client: '#7ab8ff', Edge: '#b89cff', Gateway: '#e39bf0', Service: '#2dd4bf', Async: '#f2c75e',
     Data: '#f5a65b', Obs: '#9aa8bd', Feed: '#7ab8ff', Ingest: '#d99bff',
     Consumers: '#7ab8ff', Provider: '#d99bff', Event: '#2dd4bf'
   };
@@ -221,8 +221,8 @@ const DesignGraph = (() => {
   function layout() {
     const graph = state.g;
     const count = graph.layers.length;
-    const colw = count >= 7 ? 178 : count === 6 ? 198 : 216;
-    const nw = count >= 7 ? 150 : count === 6 ? 170 : 182;
+    const nw = 188;
+    const colw = count >= 7 ? 216 : 224;
     const labelMax = Math.max(13, Math.floor((nw - 20) / 7.2));
     const subMax = Math.max(14, Math.floor((nw - 18) / 6.3));
     const columns = graph.layers.map((layer) => graph.nodes.filter((node) => node.layer === layer));
@@ -339,7 +339,7 @@ const DesignGraph = (() => {
           ${shape === 'db' ? `<path class="arch-node-cap faint" d="M 0 ${r + 7} A ${w / 2} ${r} 0 0 0 ${w} ${r + 7}"></path>` : ''}`;
       case 'queue':
         return `<rect class="arch-node-box" width="${w}" height="${h}" rx="4"></rect>
-          ${[0, 1, 2].map((i) => `<line class="arch-node-slot" x1="${w - 10 - i * 7}" y1="8" x2="${w - 10 - i * 7}" y2="${h - 8}"></line>`).join('')}`;
+          ${[0, 1, 2].map((i) => `<line class="arch-node-slot" x1="${w - 8 - i * 6}" y1="9" x2="${w - 8 - i * 6}" y2="${h - 9}"></line>`).join('')}`;
       case 'external':
         return `<rect class="arch-node-box dashed" width="${w}" height="${h}" rx="12"></rect>`;
       case 'obs':
@@ -367,11 +367,13 @@ const DesignGraph = (() => {
     const cyl = shape === 'db' || shape === 'cache';
     const pad = shape === 'edge' ? 14 : shape === 'client' ? 14 : 10;
     const top = cyl ? 4 : 0;
-    const slots = shape === 'queue' ? 26 : 0;
+    const slots = shape === 'queue' ? 24 : 0;
     const chip = 26, chipY = Math.round((nh - chip) / 2 + top / 2);
     const tx = pad + chip + 9;
-    const lmax = Math.max(8, labelMax - 5 - Math.round(slots / 7));
-    const smax = Math.max(8, subMax - 6 - Math.round(slots / 6));
+    // characters that fit in the space right of the icon (13.5px sans name, 10px mono description)
+    const room = nw - tx - 8 - slots - (shape === 'edge' ? 10 : 0);
+    const lmax = Math.max(8, Math.floor(room / 7));
+    const smax = Math.max(8, Math.floor(room / 6.1));
     return `<g class="arch-node shape-${shape}" data-node="${esc(node.id)}" transform="translate(${x},${y})" style="--node-color:${color}">
       ${shapeOutline(shape, nw, nh)}
       <g class="arch-node-icon" transform="translate(${pad},${chipY})">
@@ -463,7 +465,7 @@ const DesignGraph = (() => {
   /* ---------- Paths layout: one row per request path, every hop numbered ---------- */
   function renderPathView() {
     const graph = state.g;
-    const nw = 176, nh = NH, colw = 236, rowh = 176, left = 44, top = 64;
+    const nw = 188, nh = NH, colw = 244, rowh = 176, left = 44, top = 64;
     const ortho = state.route === 'ortho';
     const labelMax = Math.floor((nw - 26) / 7.2), subMax = Math.floor((nw - 22) / 6.3);
     let maxCols = 1;
@@ -526,7 +528,7 @@ const DesignGraph = (() => {
       }).join('');
       body += `<g class="path-row" data-row="${r}">
         <rect class="path-row-bg" x="${left - 26}" y="${y0 - 8}" width="${W - left + 16}" height="${rowh - 14}" rx="10"></rect>
-        <text class="path-row-title" x="${left - 12}" y="${y0 + 12}" data-flow-title="${r}">${r + 1}. ${esc(step.title)}</text>
+        <text class="path-row-title" x="${left - 12}" y="${y0 + 12}" data-flow-title="${r}">${step.kind && step.kind !== 'background' ? `<tspan class="rw-tag rw-${step.kind}">${step.kind === 'write' ? 'WRITE PATH' : 'READ PATH'}</tspan><tspan dx="8">` : '<tspan>'}${r + 1}. ${esc(step.title)}</tspan></text>
         ${edgesSvg}${nodesSvg}
       </g>`;
     });
@@ -901,7 +903,7 @@ const DesignGraph = (() => {
     if (state.flow >= 0) {
       const step = graph.flow[state.flow];
       const edges = step.edges.map(([from, to]) => graph.edges.findIndex((e) => e.from === from && e.to === to)).filter((i) => i >= 0);
-      panel.innerHTML = `<div class="arch-panel-kicker">USER ACTION ${state.flow + 1}/${graph.flow.length}</div>
+      panel.innerHTML = `<div class="arch-panel-kicker">${step.kind === 'write' ? '<span class="rw-pill rw-write">WRITE PATH</span>' : step.kind === 'read' ? '<span class="rw-pill rw-read">READ PATH</span>' : ''}USER ACTION ${state.flow + 1}/${graph.flow.length}</div>
         <h4>${esc(step.title)}</h4>
         <p class="arch-panel-sub">${link(step.detail)}</p>
         <div class="arch-section-h">Hop by hop</div>
@@ -965,6 +967,11 @@ const DesignGraph = (() => {
         <div><b>${graph.nodes.length}</b><span>components</span></div>
         <div><b>${graph.flow.length}</b><span>user actions</span></div>
       </div>
+      ${['write', 'read'].map((k) => {
+        const items = graph.flow.map((f, i) => ({ f, i })).filter(({ f }) => f.kind === k);
+        return items.length ? `<div class="arch-section-h"><span class="rw-pill rw-${k}">${k === 'write' ? 'WRITE PATH' : 'READ PATH'}</span></div>
+          <div class="arch-tags">${items.map(({ f, i }) => `<button class="arch-tag" data-go="flow:${i}">${esc(f.title)}</button>`).join('')}</div>` : '';
+      }).join('')}
       <ol class="read-steps">
         <li><b>Columns are layers.</b> Requests enter on the left (client) and go deeper to the right (services, queues, data).</li>
         <li><b>Arrows are connections.</b> Solid blue = the caller waits (sync). Dashed amber = handed off to a queue (async). Mint = the answer going back to the user.</li>

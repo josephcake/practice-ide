@@ -679,7 +679,7 @@ const ConceptLib = (() => {
     'Query service|Service': 'service',
     'Dashboards|Service': 'service',
     'Waiting room|Edge': 'waitingroom',
-    'Edge servers|Edge': 'websocket',
+    'Edge servers|Gateway': 'websocket',
     'Price fan-out|Service': 'websocket',
     'Fill events|Async': 'stream',
     'Event service|Service': 'service',
@@ -722,7 +722,7 @@ const ConceptLib = (() => {
     }
     if (!found && node.layer === 'Data') found = byId.get('database');
     if (!found && node.layer === 'Async') found = byId.get('stream');
-    if (!found && node.layer === 'Edge') found = byId.get('gateway');
+    if (!found && (node.layer === 'Edge' || node.layer === 'Gateway')) found = byId.get('gateway');
     if (!found) found = byId.get('service');
     cache.set(key, found);
     return found;
@@ -735,7 +735,7 @@ const ConceptLib = (() => {
     switch (node.layer) {
       case 'Client': case 'Consumers': return c && c.id === 'provider' ? 'external' : 'client';
       case 'Obs': return 'obs';
-      case 'Edge': case 'Ingest': return 'edge';
+      case 'Edge': case 'Gateway': case 'Ingest': return 'edge';
       case 'Provider': return 'external';
       case 'Service': return 'service';
       case 'Data': return ['db', 'cache', 'queue'].includes(shape) ? shape : 'db';

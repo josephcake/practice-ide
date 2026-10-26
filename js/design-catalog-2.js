@@ -253,7 +253,7 @@ DesignCatalog.add({
     'Late joiners load the last N comments from storage, then switch to the live stream.',
     'Hot event = hot channel: shard the channel and use a two-level fan-out tree.'
   ],
-  topics: ['WebSocket / SSE fan-out', 'Two-level fan-out tree', 'Sampling and ranking', 'Partitioned pub/sub', 'Moderation', 'Catch-up on join'],
+  topics: ['WebSocket / SSE fan-out', 'Two-level fan-out tree', 'Sampling and ranking', 'Sharded pub/sub', 'Moderation', 'Catch-up on join'],
   brief: {
     ask: 'Build live comments for a huge broadcast, so millions of viewers see new comments flowing in real time.',
     examples: [
@@ -271,7 +271,7 @@ DesignCatalog.add({
       ['edgews', 'Edge servers', 'WebSocket / SSE', 'Edge', 'Hold viewer connections and fan out locally.', ['Each subscribes once.']],
       ['api', 'Comment API', 'Post comment', 'Service', 'Accepts and validates new comments.', ['Rate-limited per user.']],
       ['mod', 'Moderation', 'Spam + safety', 'Service', 'Blocks obvious abuse before broadcast.', ['Async deep checks.']],
-      ['bus', 'Event channel', 'Partitioned pub/sub', 'Async', 'One channel per broadcast, sharded when hot.', ['Ordered per shard.']],
+      ['bus', 'Event channel', 'Sharded pub/sub', 'Async', 'One channel per broadcast, sharded when hot.', ['Ordered per shard.']],
       ['sampler', 'Sampler / ranker', 'Readable stream', 'Service', 'Chooses which comments each viewer receives.', ['Friends, popular, recent.']],
       ['store', 'Comment store', 'By event + time', 'Data', 'Durable comments for replay and catch-up.', ['Last N cached.']]
     ],
@@ -741,7 +741,7 @@ DesignCatalog.add({
       ['queue', 'Work queue', 'Ready jobs', 'Async', 'Jobs ready to run now.', ['Visibility timeout.']],
       ['workers', 'Workers', 'Run with lease', 'Service', 'Take a lease, run the job, report status.', ['Heartbeat while running.']],
       ['runs', 'Run history', 'Status per run', 'Data', 'Start, end, result, attempts.', ['Retries with backoff.']],
-      ['target', 'Job targets', 'Email, billing…', 'Client', 'Systems the jobs act on.', ['Must accept retries.']]
+      ['target', 'Job targets', 'Email, billing', 'Client', 'Systems the jobs act on.', ['Must accept retries.']]
     ],
     edges: [
       ['client', 'api', 'schedule', 'sync', 'Create a one-off or recurring job.'],

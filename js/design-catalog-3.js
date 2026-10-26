@@ -268,7 +268,7 @@ DesignCatalog.add({
       ['log', 'Partition log', 'Append-only files', 'Data', 'Ordered messages with offsets.', ['Retention by time/size.']],
       ['coord', 'Controller', 'Metadata + leaders', 'Service', 'Tracks brokers, partitions, and leaders.', ['Consensus (Raft).']],
       ['groups', 'Group offsets', 'Offsets + members', 'Data', 'Committed offsets and partition assignments.', ['Rebalances on change.']],
-      ['consumer', 'Consumer groups', 'Billing, email…', 'Client', 'Read at their own pace and commit offsets.', ['Replay by resetting offsets.']]
+      ['consumer', 'Consumer groups', 'Billing, email', 'Client', 'Read at their own pace and commit offsets.', ['Replay by resetting offsets.']]
     ],
     edges: [
       ['producer', 'coord', 'metadata', 'sync', 'Which broker leads this partition?'],
@@ -812,7 +812,7 @@ DesignCatalog.add({
       ['geocode', 'Place search', 'Geocoding', 'Service', 'Turns names and addresses into coordinates.', ['Search index.']],
       ['route', 'Routing', 'Shortcut graph', 'Service', 'Computes the fastest route with current weights.', ['Contraction hierarchies.']],
       ['graph', 'Road graph', 'By region', 'Data', 'Roads as nodes and edges with precomputed shortcuts.', ['Sharded by region.']],
-      ['traffic', 'Traffic pipeline', 'Speeds per road', 'Async', 'Aggregates live speeds into edge weights.', ['Updates every minute.']]
+      ['traffic', 'Live traffic', 'Speeds per road', 'Async', 'Aggregates live speeds into edge weights.', ['Updates every minute.']]
     ],
     edges: [
       ['app', 'cdn', 'tiles', 'sync', 'Request tiles for the view.'],
