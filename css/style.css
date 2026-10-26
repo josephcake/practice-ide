@@ -2255,6 +2255,14 @@ body.sidebar-hidden .sidebar, body.sidebar-hidden #resize-sidebar { display: non
 .app > .chat-pane { grid-column: 5; grid-row: 1; }
 @media (max-width: 980px) {
   .app > .main { grid-column: 1; }
+  body.sidebar-hidden .app, body.sidebar-hidden.chat-open .app { grid-template-columns: 1fr; }
+}
+body.sidebar-drawer .sidebar {
+  display: flex !important;
+  position: fixed; top: 52px; left: 0; bottom: 0; z-index: 60;
+  width: min(var(--sidebar-w, 320px), 86vw);
+  border-right: 1px solid var(--line);
+  box-shadow: 12px 0 32px rgba(0, 0, 0, .45);
 }
 
 /* Brief: Task column can be hidden for more writing room */
@@ -2528,3 +2536,105 @@ body.sidebar-hidden .sidebar, body.sidebar-hidden #resize-sidebar { display: non
 /* Brief: the Task column grows on large screens */
 .brief-grid { grid-template-columns: clamp(320px, 30vw, 560px) minmax(0, 1fr); max-width: 1920px; }
 @media (max-width: 1180px) { .brief-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ============================================================
+   No overlap at any width: panels dock side by side, toolbars never wrap
+   ============================================================ */
+/* the chat is always its own column; it only floats over the page on phone-sized screens */
+@media (max-width: 1100px) {
+  body.chat-open .app { grid-template-columns: var(--sidebar-w, 320px) 7px minmax(0, 1fr) 7px min(var(--chat-w, 380px), 34vw); }
+  body.chat-open #resize-chat { display: block; }
+  .chat-pane { position: static; width: auto; box-shadow: none; z-index: auto; }
+  body.sidebar-hidden.chat-open .app { grid-template-columns: 0 0 minmax(0, 1fr) 7px min(var(--chat-w, 380px), 38vw); }
+}
+@media (max-width: 980px) {
+  .app, body.sidebar-hidden .app { grid-template-columns: 0 0 minmax(0, 1fr); }
+  body.chat-open .app, body.sidebar-hidden.chat-open .app { grid-template-columns: 0 0 minmax(0, 1fr) 7px min(var(--chat-w, 380px), 42vw); }
+  .app > .main { grid-column: 3; }
+  .workspace .resizer { display: none; }
+}
+@media (max-width: 640px) {
+  body.chat-open .app, body.sidebar-hidden.chat-open .app { grid-template-columns: 0 0 minmax(0, 1fr); }
+  body.chat-open #resize-chat { display: none; }
+  body.chat-open .chat-pane { position: fixed; inset: 52px 0 0 0; z-index: 60; }
+}
+
+/* question + editor stack when the middle column is too narrow for both */
+.app > .main { container: main / inline-size; }
+@media (min-width: 1280px) {
+@container main (max-width: 1040px) {
+  .workspace.ai-open {
+    grid-template-columns: minmax(0, 1fr) 7px min(var(--ai-w, 360px), 40%) !important;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .workspace.ai-open > .pane.left { grid-column: 1; grid-row: 1; border-bottom: 1px solid var(--line); }
+  .workspace.ai-open > #resize-panes { display: none; }
+  .workspace.ai-open > .pane.right { grid-column: 1; grid-row: 2; }
+  .workspace.ai-open > #resize-ai { grid-column: 2; grid-row: 1 / 3; }
+  .workspace.ai-open > .ai-pane { grid-column: 3; grid-row: 1 / 3; min-width: 0; }
+}
+}
+@container main (max-width: 720px) {
+  .workspace, .workspace.ai-open { grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+  .workspace > .resizer, .workspace > .ai-pane { display: none !important; }
+  .workspace > .pane.left { border-bottom: 1px solid var(--line); }
+}
+
+/* top bars: one line, the title shrinks first, then low-priority labels drop away */
+.topbar, .global-nav, .chat-head { flex-wrap: nowrap; min-width: 0; }
+.topbar > *, .global-nav > * { flex-shrink: 0; }
+.topbar > .spacer, .global-nav > .spacer { flex: 1 1 0; min-width: 0; }
+.topbar > .page-title { flex: 0 1 auto; min-width: 60px; overflow: hidden; }
+.topbar .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar .btn, .global-nav .btn, .page-nav button, .design-views button, .chat-head .btn { white-space: nowrap; }
+.chat-head-copy { flex: 1 1 auto; overflow: hidden; }
+.chat-head .btn { flex-shrink: 0; }
+.chat-ctx { max-width: 100%; }
+@container main (max-width: 900px) {
+  .topbar kbd { display: none; }
+  .design-views button span, .design-views-arrow { display: none; }
+}
+@container main (max-width: 760px) {
+  .topbar #btn-notes { display: none; }
+  .topbar .sig { display: none; }
+}
+@container main (max-width: 560px) {
+  .topbar { gap: 4px; padding: 0 8px; }
+  .topbar > .page-title { display: none; }
+  .topbar .btn { padding: 6px 9px; }
+}
+@media (max-width: 1180px) {
+  .global-nav kbd { display: none; }
+}
+@media (max-width: 860px) {
+  #btn-help { display: none; }
+}
+
+/* canvas toolbar stays on one row: labels give way to icons when the canvas is narrow */
+.arch-toolbar { flex-wrap: nowrap; }
+.arch-canvas { container: canvas / inline-size; }
+@container canvas (max-width: 640px) {
+  .tb-group button:not(.tb-icon):has(svg) { font-size: 0; gap: 0; padding: 0 8px; }
+  .tb-group .arch-zoom-label { display: none; }
+}
+@container canvas (max-width: 420px) {
+  .tb-group.zoom { display: none; }
+}
+/* the legend leaves room for the "Drag to see more" hint in the other corner */
+#arch-modal .arch-canvas .arch-legend { max-width: min(620px, calc(100% - 210px)); }
+@container canvas (max-width: 560px) {
+  .arch-more.on { display: none; }
+  #arch-modal .arch-canvas .arch-legend { max-width: calc(100% - 24px); }
+}
+
+/* with the chat open on a laptop screen, the question list tucks behind ☰ so the work area keeps its room */
+@media (max-width: 1279px) {
+  body.chat-open .sidebar, body.chat-open #resize-sidebar { display: none; }
+  body.chat-open .app, body.sidebar-hidden.chat-open .app { grid-template-columns: 0 0 minmax(0, 1fr) 7px min(var(--chat-w, 380px), 36vw); }
+}
+@media (max-width: 980px) {
+  body.chat-open .app, body.sidebar-hidden.chat-open .app { grid-template-columns: 0 0 minmax(0, 1fr) 7px min(var(--chat-w, 380px), 42vw); }
+}
+@media (max-width: 640px) {
+  body.chat-open .app, body.sidebar-hidden.chat-open .app { grid-template-columns: 0 0 minmax(0, 1fr); }
+}

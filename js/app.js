@@ -2191,8 +2191,28 @@ function setSidebarHidden(on) {
   if (sidebarBtn) sidebarBtn.classList.toggle('on', on);
   window.dispatchEvent(new Event('resize'));
 }
+const sidebarEl = $('.sidebar');
+function setSidebarDrawer(on) {
+  document.body.classList.toggle('sidebar-drawer', on);
+}
 if (sidebarBtn) sidebarBtn.addEventListener('click', () => {
-  setSidebarHidden(!document.body.classList.contains('sidebar-hidden'));
+  if (document.body.classList.contains('sidebar-drawer')) return setSidebarDrawer(false);
+  // narrow screens (or both AI panels open) leave no column for the list, so it slides over instead
+  const tucked = !document.body.classList.contains('sidebar-hidden') && sidebarEl && getComputedStyle(sidebarEl).display === 'none';
+  if (tucked) return setSidebarDrawer(true);
+  const show = document.body.classList.contains('sidebar-hidden');
+  setSidebarHidden(!show);
+  if (show && sidebarEl && getComputedStyle(sidebarEl).display === 'none') setSidebarDrawer(true);
+});
+if (sidebarEl) sidebarEl.addEventListener('click', (e) => {
+  if (document.body.classList.contains('sidebar-drawer') && e.target.closest('.item[data-id]')) setSidebarDrawer(false);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.body.classList.contains('sidebar-drawer')) setSidebarDrawer(false);
+});
+document.addEventListener('mousedown', (e) => {
+  if (!document.body.classList.contains('sidebar-drawer')) return;
+  if (!e.target.closest('.sidebar') && !e.target.closest('#btn-sidebar')) setSidebarDrawer(false);
 });
 if (store.get('gs.sidebar.hidden', false)) setSidebarHidden(true);
 
