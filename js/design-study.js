@@ -288,6 +288,8 @@ const DesignStudy = (() => {
       stage.classList.toggle('view-brief', st.view === 'brief');
       stage.classList.toggle('view-map', st.view === 'map');
     }
+    document.body.classList.toggle('map-wide', st.view === 'map');
+    if (st.view !== 'map') document.body.classList.remove('sidebar-peek');
     document.querySelectorAll('#design-views [data-view]').forEach((b) => {
       const on = b.dataset.view === st.view;
       b.classList.toggle('on', on);
@@ -352,9 +354,15 @@ const DesignStudy = (() => {
 
   function showMap() { setView('map'); }
 
-  /** Called by the canvas whenever something is selected, so the inspector is in view. */
   function showInspect() {
     if (st && st.view === 'map' && st.tab !== 'inspect') setTab('inspect');
+  }
+
+  /** The canvas selected something: flag the Inspect tab instead of switching to it. */
+  function notifyInspect() {
+    if (!st || st.view !== 'map' || st.tab === 'inspect') return;
+    const tab = tabsEl.querySelector('[data-tab="inspect"]');
+    if (tab) tab.classList.add('has-new');
   }
 
   function focusAnswer() {
@@ -604,6 +612,7 @@ const DesignStudy = (() => {
     timer.running = false;
     const stage = document.getElementById('design-stage');
     if (stage) stage.classList.remove('view-brief', 'view-map');
+    document.body.classList.remove('map-wide', 'sidebar-peek');
     item = null;
   }
 
@@ -634,6 +643,7 @@ const DesignStudy = (() => {
     close,
     showMap,
     showInspect,
+    notifyInspect,
     setView,
     view: () => (st ? st.view : 'brief'),
     appendToStage,

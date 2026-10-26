@@ -2204,7 +2204,15 @@ function setSidebarHidden(on) {
   if (sidebarBtn) sidebarBtn.classList.toggle('on', on);
   window.dispatchEvent(new Event('resize'));
 }
-if (sidebarBtn) sidebarBtn.addEventListener('click', () => setSidebarHidden(!document.body.classList.contains('sidebar-hidden')));
+if (sidebarBtn) sidebarBtn.addEventListener('click', () => {
+  // the Map view tucks the list away for canvas room; ☰ peeks at it without changing the saved preference
+  if (document.body.classList.contains('map-wide')) {
+    document.body.classList.toggle('sidebar-peek');
+    window.dispatchEvent(new Event('resize'));
+    return;
+  }
+  setSidebarHidden(!document.body.classList.contains('sidebar-hidden'));
+});
 if (store.get('gs.sidebar.hidden', false)) setSidebarHidden(true);
 
 $('#btn-notes').addEventListener('click', () => { state.tab = 'notes'; renderTabs(); renderDoc(); });

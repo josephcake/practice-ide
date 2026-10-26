@@ -442,14 +442,15 @@ const DesignGraph = (() => {
     Data: '#f5a65b', Obs: '#9aa8bd', Feed: '#7ab8ff', Ingest: '#d99bff',
     Consumers: '#7ab8ff', Provider: '#d99bff', Event: '#2dd4bf'
   };
-  const NH = 56, TOP = 104, LEFT = 40;
+  const NH = 62, TOP = 96, LEFT = 40;
 
   const state = {
     id: null, g: null, selected: null, selectedEdge: null,
     tab: 'inspect', view: { x: 0, y: 0, w: 1, h: 1 }, target: { x: 0, y: 0, w: 1, h: 1 }, W: 1, H: 1,
     flow: -1, timer: null, panning: false, last: null, inline: false,
     raf: null, smooth: 80,
-    layout: (() => { try { return JSON.parse(localStorage.getItem('gs.arch.layout')) === 'paths' ? 'paths' : 'layers'; } catch (e) { return 'layers'; } })()
+    layout: (() => { try { return JSON.parse(localStorage.getItem('gs.arch.layout')) === 'paths' ? 'paths' : 'layers'; } catch (e) { return 'layers'; } })(),
+    route: (() => { try { return JSON.parse(localStorage.getItem('gs.arch.route')) === 'ortho' ? 'ortho' : 'curved'; } catch (e) { return 'curved'; } })()
   };
 
   const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => (
@@ -497,6 +498,11 @@ const DesignGraph = (() => {
       const btn = event.target.closest('[data-layout]');
       if (btn) setLayout(btn.dataset.layout);
     });
+    const routeSeg = byId('arch-route');
+    if (routeSeg) routeSeg.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-route]');
+      if (btn) setRoute(btn.dataset.route);
+    });
     const expandBtn = byId('arch-expand');
     if (expandBtn) expandBtn.addEventListener('click', () => setExpanded());
 
@@ -525,23 +531,12 @@ const DesignGraph = (() => {
         return;
       }
       const node = event.target.closest('[data-node]');
-      if (node) { selectNode(node.dataset.node); showQuick(event, quickNodeHTML(node.dataset.node)); return; }
+      if (node) { selectNode(node.dataset.node); return; }
       const edge = event.target.closest('[data-edge]');
-      if (edge) { selectEdge(Number(edge.dataset.edge)); showQuick(event, quickEdgeHTML(Number(edge.dataset.edge))); return; }
+      if (edge) { selectEdge(Number(edge.dataset.edge)); return; }
       const down = state.downAt;
       const dragged = down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > 4;
       if (!dragged && hasFocus()) clearFocus();
-      else hideQuick();
-    });
-    const canvas = svg.parentElement;
-    canvas.addEventListener('click', (event) => {
-      const card = event.target.closest('.arch-quick');
-      if (!card) return;
-      event.stopPropagation();
-      if (event.target.closest('[data-quick="details"]')) { hideQuick(); if (typeof DesignStudy !== 'undefined') DesignStudy.showInspect(); }
-      if (event.target.closest('[data-quick="close"]')) hideQuick();
-      const ask = event.target.closest('[data-ask]');
-      if (ask && typeof AIChat !== 'undefined') { hideQuick(); AIChat.ask(ask.dataset.ask); }
     });
 
     svg.addEventListener('wheel', (event) => {
@@ -557,7 +552,6 @@ const DesignGraph = (() => {
     svg.addEventListener('pointerdown', (event) => {
       state.downAt = { x: event.clientX, y: event.clientY };
       if (event.target.closest('[data-node]') || event.target.closest('[data-edge]')) return;
-      hideQuick();
       state.panning = true;
       state.last = { x: event.clientX, y: event.clientY };
       svg.classList.add('dragging');
@@ -579,7 +573,6 @@ const DesignGraph = (() => {
 
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
-      if (quickEl && quickEl.classList.contains('on')) { event.stopImmediatePropagation(); hideQuick(); return; }
       if (modal.classList.contains('expanded')) { event.stopImmediatePropagation(); setExpanded(false); return; }
       if (modal.classList.contains('on')) close();
     });
@@ -654,8 +647,8 @@ const DesignGraph = (() => {
   function layout() {
     const graph = state.g;
     const count = graph.layers.length;
-    const colw = count >= 7 ? 158 : count === 6 ? 176 : 194;
-    const nw = count >= 7 ? 132 : count === 6 ? 150 : 160;
+    const colw = count >= 7 ? 178 : count === 6 ? 198 : 216;
+    const nw = count >= 7 ? 150 : count === 6 ? 170 : 182;
     const labelMax = Math.max(13, Math.floor((nw - 20) / 7.2));
     const subMax = Math.max(14, Math.floor((nw - 18) / 6.3));
     const columns = graph.layers.map((layer) => graph.nodes.filter((node) => node.layer === layer));
@@ -711,14 +704,12 @@ const DesignGraph = (() => {
       const x1 = from.x + nw, y1 = from.y + nh / 2;
       const x2 = to.x, y2 = to.y + nh / 2;
       const forward = x2 >= x1;
-      const dx = Math.max(52, Math.abs(x2 - x1) * 0.45);
-      const d = forward
-        ? `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`
-        : `M ${x1} ${y1} C ${x1 + 90} ${y1 - 75}, ${x2 - 90} ${y2 + 75}, ${x2} ${y2}`;
+      const route = layerRoute(x1, y1, x2, y2, forward, index, nh);
+      const d = route.d;
       const targetNode = nodeMap.get(edge.to);
       const isReturn = !!(targetNode && (targetNode.layer === 'Client' || targetNode.layer === 'Consumers' || targetNode.id === 'recipient' || targetNode.id === 'user'));
-      const labelX = (x1 + x2) / 2;
-      const labelY = (y1 + y2) / 2 - (forward ? 7 : 0) + ((index % 5) - 2) * 7;
+      const labelX = route.lx;
+      const labelY = route.ly;
       const label = edge.kind === 'obs' ? '' : `<text class="arch-edge-label ${edge.kind}" x="${labelX}" y="${labelY}" text-anchor="middle">${esc(edge.label)}</text>`;
       const distance = Math.hypot(x2 - x1, y2 - y1) + 90;
       const duration = Math.min(5.4, Math.max(2.2, distance / 260)) + (edge.kind === 'async' ? 0.7 : edge.kind === 'obs' ? 1.5 : 0);
@@ -780,24 +771,42 @@ const DesignGraph = (() => {
       case 'obs':
         return `<rect class="arch-node-box dotted" width="${w}" height="${h}" rx="4"></rect>`;
       default:
-        return `<rect class="arch-node-box" width="${w}" height="${h}" rx="6"></rect>
-          <rect class="arch-node-bar" width="4" height="${h}" rx="2"></rect>`;
+        return `<rect class="arch-node-box" width="${w}" height="${h}" rx="9"></rect>`;
     }
   }
+
+  /** 16×16 line icon for each component type, drawn in the component's color. */
+  const SHAPE_ICON = {
+    client: '<circle cx="8" cy="5.5" r="2.6"/><path d="M3 14c.6-3 2.6-4.4 5-4.4s4.4 1.4 5 4.4"/>',
+    edge: '<path d="M8 1.8 13.5 4v4.2c0 3-2.3 5.1-5.5 6-3.2-.9-5.5-3-5.5-6V4z"/><path d="m5.6 8 1.7 1.7L10.6 6.4"/>',
+    service: '<rect x="2" y="2.5" width="12" height="4.5" rx="1.2"/><rect x="2" y="9" width="12" height="4.5" rx="1.2"/><path d="M4.5 4.75h.01M4.5 11.25h.01"/>',
+    queue: '<rect x="1.5" y="5" width="3.6" height="6" rx=".8"/><rect x="6.2" y="5" width="3.6" height="6" rx=".8"/><rect x="10.9" y="5" width="3.6" height="6" rx=".8"/>',
+    db: '<ellipse cx="8" cy="3.8" rx="5.5" ry="2"/><path d="M2.5 3.8v8.4c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V3.8"/><path d="M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/>',
+    cache: '<path d="M9.2 1.5 3.5 9h4l-1 5.5L12.5 7h-4z"/>',
+    external: '<path d="M4.5 12.5a3 3 0 0 1-.4-6A4.2 4.2 0 0 1 12.2 6a3.3 3.3 0 0 1-.2 6.5z"/>',
+    obs: '<path d="M2 13.5h12"/><path d="m3 10.5 3-3.5 2.5 2 4.5-5"/>'
+  };
 
   function nodeShape(node, x, y, nw, nh, labelMax, subMax) {
     const color = colorFor(node.layer);
     const shape = shapeOf(node);
     const cyl = shape === 'db' || shape === 'cache';
-    const pad = shape === 'edge' ? 16 : shape === 'client' ? 16 : 12;
-    const top = cyl ? 6 : 0;
+    const pad = shape === 'edge' ? 14 : shape === 'client' ? 14 : 10;
+    const top = cyl ? 4 : 0;
     const slots = shape === 'queue' ? 26 : 0;
-    const lmax = Math.max(8, labelMax - Math.round(slots / 7));
+    const chip = 26, chipY = Math.round((nh - chip) / 2 + top / 2);
+    const tx = pad + chip + 9;
+    const lmax = Math.max(8, labelMax - 5 - Math.round(slots / 7));
+    const smax = Math.max(8, subMax - 6 - Math.round(slots / 6));
     return `<g class="arch-node shape-${shape}" data-node="${esc(node.id)}" transform="translate(${x},${y})" style="--node-color:${color}">
       ${shapeOutline(shape, nw, nh)}
-      <text class="arch-node-badge" x="${shape === 'queue' ? nw - 36 : nw - (shape === 'edge' ? 14 : 9)}" y="${11 + top}" text-anchor="end">${SHAPE_BADGE[shape] || ''}</text>
-      <text class="arch-node-label" x="${pad}" y="${25 + top}">${esc(cut(node.label, lmax))}</text>
-      <text class="arch-node-sub" x="${pad}" y="${42 + top}">${esc(cut(node.sub, subMax - Math.round(slots / 6)))}</text>
+      <g class="arch-node-icon" transform="translate(${pad},${chipY})">
+        <rect class="icon-chip" width="${chip}" height="${chip}" rx="7"></rect>
+        <g class="icon-glyph" transform="translate(5,5)">${SHAPE_ICON[shape] || SHAPE_ICON.service}</g>
+      </g>
+      <text class="arch-node-badge" x="${tx}" y="${17 + top}">${SHAPE_BADGE[shape] || ''}</text>
+      <text class="arch-node-label" x="${tx}" y="${34 + top}">${esc(cut(node.label, lmax))}</text>
+      <text class="arch-node-sub" x="${tx}" y="${49 + top}">${esc(cut(node.sub, smax))}</text>
       <title>${esc(node.label)} (${esc(SHAPE_BADGE[shape] || '').toLowerCase()}): ${esc(node.detail)}</title>
     </g>`;
   }
@@ -818,6 +827,60 @@ const DesignGraph = (() => {
     </g>`;
   }
 
+  /** Path for a Components-view edge: smooth curves, or only horizontal/vertical segments. */
+  function layerRoute(x1, y1, x2, y2, forward, index, nh) {
+    if (state.route !== 'ortho') {
+      const dx = Math.max(52, Math.abs(x2 - x1) * 0.45);
+      return {
+        d: forward
+          ? `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`
+          : `M ${x1} ${y1} C ${x1 + 90} ${y1 - 75}, ${x2 - 90} ${y2 + 75}, ${x2} ${y2}`,
+        lx: (x1 + x2) / 2,
+        ly: (y1 + y2) / 2 - (forward ? 7 : 0) + ((index % 5) - 2) * 7
+      };
+    }
+    if (forward) {
+      if (Math.abs(y1 - y2) < 1) return { d: `M ${x1} ${y1} H ${x2}`, lx: (x1 + x2) / 2, ly: y1 - 6 };
+      const mx = Math.round(x1 + (x2 - x1) / 2 + ((index % 3) - 1) * 9);
+      return { d: `M ${x1} ${y1} H ${mx} V ${y2} H ${x2}`, lx: (x1 + mx) / 2, ly: y1 - 6 };
+    }
+    const out = x1 + 16 + (index % 3) * 6;
+    const back = x2 - 16 - (index % 3) * 6;
+    const low = Math.max(y1, y2) + nh / 2 + 18 + (index % 4) * 9;
+    return { d: `M ${x1} ${y1} H ${out} V ${low} H ${back} V ${y2} H ${x2}`, lx: (out + back) / 2, ly: low - 5 };
+  }
+
+  /** Each time a packet arrives at the end of a connection, pulse the component it entered. */
+  function bindPulses() {
+    svg.querySelectorAll('.arch-edge-group').forEach((group) => {
+      const edge = state.g.edges[Number(group.dataset.edge)];
+      const anim = group.querySelector('animateMotion');
+      if (!edge || !anim || edge.kind === 'obs') return;
+      anim.addEventListener('repeatEvent', () => {
+        if (group.classList.contains('dim')) return;
+        const scope = group.closest('.path-row') || svg;
+        const node = scope.querySelector(`[data-node="${edge.to}"]`);
+        if (!node || node.classList.contains('dim')) return;
+        node.classList.remove('pulse');
+        void node.getBoundingClientRect();
+        node.classList.add('pulse');
+        clearTimeout(node.pulseTimer);
+        node.pulseTimer = setTimeout(() => node.classList.remove('pulse'), 650);
+      });
+    });
+  }
+
+  function setRoute(route) {
+    if (!state.g) return;
+    state.route = route === 'ortho' ? 'ortho' : 'curved';
+    try { localStorage.setItem('gs.arch.route', JSON.stringify(state.route)); } catch (e) { /* ignore */ }
+    const flow = state.flow, sel = state.selected, edge = state.selectedEdge;
+    render();
+    if (flow >= 0) startFlowAt(flow);
+    else if (sel) selectNode(sel);
+    else if (edge != null) selectEdge(edge);
+  }
+
   function isReturnEdge(edge) {
     const t = nodeMap.get(edge.to);
     return !!(t && (t.layer === 'Client' || t.layer === 'Consumers'));
@@ -826,7 +889,8 @@ const DesignGraph = (() => {
   /* ---------- Paths layout: one row per request path, every hop numbered ---------- */
   function renderPathView() {
     const graph = state.g;
-    const nw = 150, nh = NH, colw = 214, rowh = 168, left = 44, top = 64;
+    const nw = 176, nh = NH, colw = 236, rowh = 176, left = 44, top = 64;
+    const ortho = state.route === 'ortho';
     const labelMax = Math.floor((nw - 26) / 7.2), subMax = Math.floor((nw - 22) / 6.3);
     let maxCols = 1;
     const rows = graph.flow.map((step) => {
@@ -861,12 +925,16 @@ const DesignGraph = (() => {
           lx = (x1 + x2) / 2; ly = yy - 7;
         } else if (ib > ia) {
           const x1 = pa.x + nw / 2 + 14, x2 = pb.x + nw / 2 - 14, lift = 22 + (ib - ia) * 4;
-          d = `M ${x1} ${pa.y} C ${x1} ${pa.y - lift}, ${x2} ${pb.y - lift}, ${x2} ${pb.y}`;
-          lx = (x1 + x2) / 2; ly = pa.y - lift + 2;
+          d = ortho
+            ? `M ${x1} ${pa.y} V ${pa.y - lift} H ${x2} V ${pb.y}`
+            : `M ${x1} ${pa.y} C ${x1} ${pa.y - lift}, ${x2} ${pb.y - lift}, ${x2} ${pb.y}`;
+          lx = (x1 + x2) / 2; ly = pa.y - lift + (ortho ? 0 : 2);
         } else {
           const x1 = pa.x + nw / 2 - 14, x2 = pb.x + nw / 2 + 14, drop = 26 + (ia - ib) * 5;
-          d = `M ${x1} ${pa.y + nh} C ${x1} ${pa.y + nh + drop}, ${x2} ${pb.y + nh + drop}, ${x2} ${pb.y + nh}`;
-          lx = (x1 + x2) / 2; ly = pa.y + nh + drop - 2;
+          d = ortho
+            ? `M ${x1} ${pa.y + nh} V ${pa.y + nh + drop} H ${x2} V ${pb.y + nh}`
+            : `M ${x1} ${pa.y + nh} C ${x1} ${pa.y + nh + drop}, ${x2} ${pb.y + nh + drop}, ${x2} ${pb.y + nh}`;
+          lx = (x1 + x2) / 2; ly = pa.y + nh + drop - (ortho ? 0 : 2);
         }
         const pid = `arch-pp-${r}-${k}`;
         edgesSvg += `<g class="arch-edge-group ${edge.kind}${ret ? ' return' : ''}" data-edge="${gi}">
@@ -896,11 +964,14 @@ const DesignGraph = (() => {
   }
 
   function render() {
-    hideQuick();
     if (state.layout === 'paths') renderPathView();
     else renderSVG();
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    bindPulses();
     const seg = byId('arch-layout');
     if (seg) seg.querySelectorAll('[data-layout]').forEach((b) => b.classList.toggle('on', b.dataset.layout === state.layout));
+    const routeSeg = byId('arch-route');
+    if (routeSeg) routeSeg.querySelectorAll('[data-route]').forEach((b) => b.classList.toggle('on', b.dataset.route === state.route));
   }
 
   function setLayout(layout) {
@@ -1014,6 +1085,7 @@ const DesignGraph = (() => {
 
   function showInspector(open) {
     if (!state.inline || !modal) return;
+    if (open && typeof DesignStudy !== 'undefined') DesignStudy.notifyInspect();
     modal.classList.toggle('inspector-open', open);
     const side = modal.querySelector('.arch-side');
     if (side) side.toggleAttribute('inert', !open);
@@ -1084,66 +1156,12 @@ const DesignGraph = (() => {
     emit();
   }
 
-  /* ---------- quick card: a small answer on the canvas, no panel switch ---------- */
-  let quickEl = null;
-
-  function quickNodeHTML(id) {
-    const node = nodeMap.get(id);
-    if (!node) return '';
-    const shape = shapeOf(node);
-    const c = typeof ConceptLib !== 'undefined' ? ConceptLib.forNode(node) : null;
-    return `<div class="quick-kicker" style="color:${colorFor(node.layer)}">${esc(SHAPE_BADGE[shape] || '')}${c ? ' · ' + esc(c.name) : ''}</div>
-      <b>${esc(node.label)}</b><span class="quick-sub">${esc(node.sub)}</span>
-      <p>${link(node.detail)}</p>
-      ${riskHTML(node, true)}
-      <div class="quick-actions">
-        <button class="btn tiny" data-quick="details" type="button">Details</button>
-        <button class="btn tiny ask-ai-btn" data-ask="${esc(`In ${state.g.title}, what problem does the ${node.label} (${node.sub}) solve, and what would go wrong without it?`)}" type="button">✦ Ask</button>
-      </div>`;
-  }
-
-  function quickEdgeHTML(index) {
-    const e = state.g.edges[index];
-    if (!e) return '';
-    return `<div class="quick-kicker">${esc(e.kind === 'obs' ? 'TELEMETRY' : e.kind.toUpperCase())} · ${esc(e.label)}</div>
-      <b>${esc(nodeLabel(e.from))} → ${esc(nodeLabel(e.to))}</b>
-      <p>${link(e.detail || '')}</p>
-      <p class="quick-dim">${esc(KIND_MEANING[e.kind] || '')}</p>
-      <div class="quick-actions">
-        <button class="btn tiny" data-quick="details" type="button">Details</button>
-        <button class="btn tiny ask-ai-btn" data-ask="${esc(`In ${state.g.title}, why is the ${nodeLabel(e.from)} → ${nodeLabel(e.to)} call ${e.kind}?`)}" type="button">✦ Ask</button>
-      </div>`;
-  }
-
-  function showQuick(event, html) {
-    if (!html || !svg) return;
-    const canvas = svg.parentElement;
-    if (!quickEl) {
-      quickEl = document.createElement('div');
-      quickEl.className = 'arch-quick';
-      canvas.appendChild(quickEl);
-    }
-    quickEl.innerHTML = `<button class="quick-close" data-quick="close" type="button" aria-label="Close">✕</button>${html}`;
-    quickEl.classList.add('on');
-    const rect = canvas.getBoundingClientRect();
-    const w = quickEl.offsetWidth, h = quickEl.offsetHeight;
-    let x = event.clientX - rect.left + 14;
-    let y = event.clientY - rect.top + 14;
-    if (x + w > rect.width - 8) x = event.clientX - rect.left - w - 14;
-    if (y + h > rect.height - 8) y = Math.max(8, rect.height - h - 8);
-    quickEl.style.left = Math.max(8, x) + 'px';
-    quickEl.style.top = Math.max(8, y) + 'px';
-  }
-
-  function hideQuick() { if (quickEl) quickEl.classList.remove('on'); }
-
   function hasFocus() {
     return state.selected != null || state.selectedEdge != null || state.flow >= 0
       || !!(svg && svg.querySelector('.dim'));
   }
 
   function clearFocus() {
-    hideQuick();
     stopFlow();
     state.selected = null;
     state.selectedEdge = null;
@@ -1192,7 +1210,6 @@ const DesignGraph = (() => {
 
 
   function startFlowAt(index) {
-    hideQuick();
     state.selected = null;
     state.selectedEdge = null;
     state.flow = Math.max(0, Math.min(state.g.flow.length - 1, index));
@@ -1397,6 +1414,7 @@ const DesignGraph = (() => {
     getFocus,
     getGraph: () => state.g,
     setLayout,
+    setRoute,
     setExpanded,
     conceptCard,
     shapeIcon,

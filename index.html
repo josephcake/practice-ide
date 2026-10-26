@@ -265,22 +265,31 @@
         <h3 id="arch-title">Architecture</h3>
         <div class="arch-sub" id="arch-sub"></div>
       </div>
-      <div class="spacer"></div>
-      <div class="arch-seg" id="arch-layout" role="group" aria-label="Canvas layout">
-        <button data-layout="layers" title="Every component, arranged by layer">Components</button>
-        <button data-layout="paths" title="Each thing a user does, as its own row with every hop numbered">User actions</button>
-      </div>
-      <button class="btn tiny ghost" id="arch-zoom-out" title="Zoom out">−</button>
-      <button class="btn tiny ghost" id="arch-zoom-in" title="Zoom in">+</button>
-      <span class="arch-zoom-label" id="arch-zoom">100%</span>
-      <button class="btn tiny ghost" id="arch-reset" title="Fit the whole map in view">Fit</button>
-      <button class="btn tiny ghost icon-btn" id="arch-expand" title="Expand canvas to full screen (E · Esc to exit)" aria-label="Expand canvas">⤢</button>
       <button class="btn tiny ghost" id="arch-close">Close</button>
     </div>
-    <div class="arch-legend" id="arch-legend"></div>
     <div class="arch-main">
       <div class="arch-canvas" id="arch-canvas">
         <svg id="arch-svg" role="img" aria-label="Interactive system architecture" xmlns:xlink="http://www.w3.org/1999/xlink"></svg>
+        <div class="arch-toolbar" role="toolbar" aria-label="Canvas controls">
+          <div class="tb-group" id="arch-layout" role="group" aria-label="View">
+            <button data-layout="layers" title="Every component, arranged by layer" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2" width="4" height="12" rx="1"/><rect x="6" y="2" width="4" height="12" rx="1"/><rect x="10.5" y="2" width="4" height="12" rx="1"/></svg>Components</button>
+            <button data-layout="paths" title="Each thing a user does, as its own row with every hop numbered" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="4" r="1.6"/><path d="M5 4h8"/><circle cx="3" cy="12" r="1.6"/><path d="M5 12h8"/><path d="M11 2l2 2-2 2M11 10l2 2-2 2"/></svg>User actions</button>
+          </div>
+          <div class="tb-group" id="arch-route" role="group" aria-label="Line style">
+            <button data-route="curved" title="Curved connections" type="button" aria-label="Curved lines"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13C6 13 6 3 14 3"/></svg>Curved</button>
+            <button data-route="ortho" title="Straight lines with 90° turns only" type="button" aria-label="Right-angle lines"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13h6V3h6"/></svg>Right-angle</button>
+          </div>
+          <div class="tb-group zoom" role="group" aria-label="Zoom">
+            <button id="arch-zoom-out" title="Zoom out" type="button" aria-label="Zoom out">−</button>
+            <span class="arch-zoom-label" id="arch-zoom">100%</span>
+            <button id="arch-zoom-in" title="Zoom in" type="button" aria-label="Zoom in">+</button>
+          </div>
+          <div class="tb-group" role="group" aria-label="View size">
+            <button id="arch-reset" title="Fit the whole map in view" type="button">Fit</button>
+            <button id="arch-expand" class="tb-icon" title="Expand canvas to full screen (E · Esc to exit)" type="button" aria-label="Expand canvas">⤢</button>
+          </div>
+        </div>
+        <div class="arch-legend" id="arch-legend"></div>
       </div>
       <aside class="arch-side">
         <div class="arch-tabs">
