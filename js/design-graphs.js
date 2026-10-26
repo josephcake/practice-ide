@@ -113,6 +113,13 @@ const DesignGraph = (() => {
       if (!dragged && hasFocus()) clearFocus();
     });
 
+    svg.addEventListener('mouseover', (event) => {
+      const g = event.target.closest('[data-edge]');
+      svg.querySelectorAll('.edge-label-wrap.peek').forEach((el) => el.classList.remove('peek'));
+      if (g) svg.querySelectorAll(`.edge-label-wrap[data-edge="${g.dataset.edge}"]`).forEach((el) => el.classList.add('peek'));
+    });
+    svg.addEventListener('mouseleave', () => svg.querySelectorAll('.edge-label-wrap.peek').forEach((el) => el.classList.remove('peek')));
+
     svg.addEventListener('wheel', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -271,6 +278,7 @@ const DesignGraph = (() => {
         <line x1="${x}" y1="52" x2="${x}" y2="${H - 22}" stroke="${colorFor(layer)}" stroke-opacity=".14"></line>`;
     }).join('');
 
+    const labelMarkup = [];
     const edgeMarkup = graph.edges.map((edge, index) => {
       const from = positions.get(edge.from);
       const to = positions.get(edge.to);
@@ -284,7 +292,9 @@ const DesignGraph = (() => {
       const isReturn = !!(targetNode && (targetNode.layer === 'Client' || targetNode.layer === 'Consumers' || targetNode.id === 'recipient' || targetNode.id === 'user'));
       const labelX = route.lx;
       const labelY = route.ly;
-      const label = edge.kind === 'obs' ? '' : `<text class="arch-edge-label ${edge.kind}" x="${labelX}" y="${labelY}" text-anchor="middle">${esc(edge.label)}</text>`;
+      if (edge.kind !== 'obs') {
+        labelMarkup.push(`<g class="edge-label-wrap ${edge.kind}${isReturn ? ' return' : ''}" data-edge="${index}"><text class="arch-edge-label ${edge.kind}" x="${labelX}" y="${labelY}" text-anchor="middle">${esc(edge.label)}</text></g>`);
+      }
       const distance = Math.hypot(x2 - x1, y2 - y1) + 90;
       const duration = Math.min(5.4, Math.max(2.2, distance / 260)) + (edge.kind === 'async' ? 0.7 : edge.kind === 'obs' ? 1.5 : 0);
       const begin = -((index * 0.43) % 4).toFixed(2);
@@ -295,7 +305,6 @@ const DesignGraph = (() => {
           : '<rect class="packet-core" x="-2.5" y="-2.5" width="5" height="5" rx="0.8"></rect>';
       return `<g class="arch-edge-group ${edge.kind}${isReturn ? ' return' : ''}" data-edge="${index}">
         <path id="arch-edge-path-${index}" class="arch-edge ${edge.kind}${isReturn ? ' return' : ''}" d="${d}" marker-end="url(#arch-arrow-${isReturn ? 'return' : edge.kind})"></path>
-        ${label}
         <g class="arch-packet ${edge.kind}" aria-hidden="true">
           <circle class="packet-halo" r="8"></circle>
           ${packetShape}
@@ -314,7 +323,7 @@ const DesignGraph = (() => {
 
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('preserveAspectRatio', 'xMidYMin meet');
-    svg.innerHTML = defs + layers + edgeMarkup + nodeMarkup;
+    svg.innerHTML = defs + layers + edgeMarkup + nodeMarkup + `<g class="edge-labels">${labelMarkup.join('')}</g>`;
     clearHighlights();
   }
 
@@ -361,6 +370,17 @@ const DesignGraph = (() => {
     obs: '<path d="M2 13.5h12"/><path d="m3 10.5 3-3.5 2.5 2 4.5-5"/>'
   };
 
+  /** The type tag above each name: specific for edge components, the shape family otherwise. */
+  function badgeFor(node, shape) {
+    const c = typeof ConceptLib !== 'undefined' ? ConceptLib.forNode(node) : null;
+    if (c && c.id === 'lb') return 'LOAD BALANCER';
+    if (c && c.id === 'cdn') return 'CDN';
+    if (c && c.id === 'websocket') return 'REAL-TIME';
+    if (c && c.id === 'waitingroom') return 'WAITING ROOM';
+    if (node.layer === 'Gateway') return 'GATEWAY';
+    return SHAPE_BADGE[shape] || '';
+  }
+
   function nodeShape(node, x, y, nw, nh, labelMax, subMax) {
     const color = colorFor(node.layer);
     const shape = shapeOf(node);
@@ -370,17 +390,17 @@ const DesignGraph = (() => {
     const slots = shape === 'queue' ? 24 : 0;
     const chip = 26, chipY = Math.round((nh - chip) / 2 + top / 2);
     const tx = pad + chip + 9;
-    // characters that fit in the space right of the icon (13.5px sans name, 10px mono description)
+    // characters that fit in the space right of the icon (14px sans name, 11.5px sans description)
     const room = nw - tx - 8 - slots - (shape === 'edge' ? 10 : 0);
-    const lmax = Math.max(8, Math.floor(room / 7));
-    const smax = Math.max(8, Math.floor(room / 6.1));
-    return `<g class="arch-node shape-${shape}" data-node="${esc(node.id)}" transform="translate(${x},${y})" style="--node-color:${color}">
+    const lmax = Math.max(8, Math.floor(room / 7.3));
+    const smax = Math.max(8, Math.floor(room / 6));
+    return `<g class="arch-node shape-${shape}" data-node="${esc(node.id)}" data-box="${x},${y},${nw},${nh}" transform="translate(${x},${y})" style="--node-color:${color}">
       ${shapeOutline(shape, nw, nh)}
       <g class="arch-node-icon" transform="translate(${pad},${chipY})">
         <rect class="icon-chip" width="${chip}" height="${chip}" rx="7"></rect>
         <g class="icon-glyph" transform="translate(5,5)">${SHAPE_ICON[shape] || SHAPE_ICON.service}</g>
       </g>
-      <text class="arch-node-badge" x="${tx}" y="${17 + top}">${SHAPE_BADGE[shape] || ''}</text>
+      <text class="arch-node-badge" x="${tx}" y="${17 + top}">${badgeFor(node, shape)}</text>
       <text class="arch-node-label" x="${tx}" y="${34 + top}">${esc(cut(node.label, lmax))}</text>
       <text class="arch-node-sub" x="${tx}" y="${49 + top}">${esc(cut(node.sub, smax))}</text>
       <title>${esc(node.label)} (${esc(SHAPE_BADGE[shape] || '').toLowerCase()}): ${esc(node.detail)}</title>
@@ -465,7 +485,7 @@ const DesignGraph = (() => {
   /* ---------- Paths layout: one row per request path, every hop numbered ---------- */
   function renderPathView() {
     const graph = state.g;
-    const nw = 188, nh = NH, colw = 244, rowh = 176, left = 44, top = 64;
+    const nw = 188, nh = NH, colw = 300, rowh = 186, left = 44, top = 64;
     const ortho = state.route === 'ortho';
     const labelMax = Math.floor((nw - 26) / 7.2), subMax = Math.floor((nw - 22) / 6.3);
     let maxCols = 1;
@@ -487,6 +507,7 @@ const DesignGraph = (() => {
       const y0 = top + r * rowh;
       const pos = (id) => ({ x: left + order.indexOf(id) * colw, y: y0 + 34 });
       let edgesSvg = '';
+      let labelsSvg = '';
       step.edges.forEach(([a, b], k) => {
         const gi = graph.edges.findIndex((e) => e.from === a && e.to === b);
         const edge = graph.edges[gi];
@@ -496,9 +517,9 @@ const DesignGraph = (() => {
         const ret = isReturnEdge(edge);
         let d, lx, ly;
         if (ib === ia + 1) {
-          const x1 = pa.x + nw, x2 = pb.x, yy = pa.y + nh / 2 - 6 + (k % 2) * 4;
+          const x1 = pa.x + nw, x2 = pb.x, yy = pa.y + nh / 2;
           d = `M ${x1} ${yy} L ${x2} ${yy}`;
-          lx = (x1 + x2) / 2; ly = yy - 7;
+          lx = (x1 + x2) / 2; ly = yy;
         } else if (ib > ia) {
           const x1 = pa.x + nw / 2 + 14, x2 = pb.x + nw / 2 - 14, lift = 22 + (ib - ia) * 4;
           d = ortho
@@ -515,10 +536,12 @@ const DesignGraph = (() => {
         const pid = `arch-pp-${r}-${k}`;
         edgesSvg += `<g class="arch-edge-group ${edge.kind}${ret ? ' return' : ''}" data-edge="${gi}">
           <path id="${pid}" class="arch-edge ${edge.kind}${ret ? ' return' : ''}" d="${d}" marker-end="url(#arch-arrow-${ret ? 'return' : edge.kind})"></path>
-          <g class="hop-badge" transform="translate(${lx},${ly})"><circle r="8"></circle><text y="3.5" text-anchor="middle">${k + 1}</text></g>
-          <text class="arch-edge-label ${edge.kind}" x="${lx + 12}" y="${ly + 4}">${esc(edge.label)}</text>
           ${packetMarkup(edge.kind, pid, 260, k)}
           <title>${k + 1}. ${esc(nodeLabel(a))} → ${esc(nodeLabel(b))}: ${esc(edge.detail || edge.label)}</title>
+        </g>`;
+        labelsSvg += `<g class="edge-label-wrap ${edge.kind}${ret ? ' return' : ''}" data-edge="${gi}">
+          <g class="hop-badge" transform="translate(${lx},${ly})"><circle r="10"></circle><text y="4" text-anchor="middle">${k + 1}</text></g>
+          <text class="arch-edge-label ${edge.kind}" x="${lx}" y="${ly - 16}" text-anchor="middle">${esc(edge.label)}</text>
         </g>`;
       });
       const nodesSvg = order.map((id) => {
@@ -529,20 +552,62 @@ const DesignGraph = (() => {
       body += `<g class="path-row" data-row="${r}">
         <rect class="path-row-bg" x="${left - 26}" y="${y0 - 8}" width="${W - left + 16}" height="${rowh - 14}" rx="10"></rect>
         <text class="path-row-title" x="${left - 12}" y="${y0 + 12}" data-flow-title="${r}">${step.kind && step.kind !== 'background' ? `<tspan class="rw-tag rw-${step.kind}">${step.kind === 'write' ? 'WRITE PATH' : 'READ PATH'}</tspan><tspan dx="8">` : '<tspan>'}${r + 1}. ${esc(step.title)}</tspan></text>
-        ${edgesSvg}${nodesSvg}
+        ${edgesSvg}${nodesSvg}<g class="edge-labels">${labelsSvg}</g>
       </g>`;
     });
 
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('preserveAspectRatio', 'xMidYMin meet');
-    svg.innerHTML = svgDefs() + `<text class="arch-layer" x="${left - 12}" y="30" fill="#8fa3bf">USER ACTIONS, HOP BY HOP · numbers show the order · arcs below are responses · click a title to highlight it</text>` + body;
+    svg.innerHTML = svgDefs() + `<text class="arch-layer" x="${left - 12}" y="30" fill="#8fa3bf">USER ACTIONS, HOP BY HOP · numbers show the order · arcs below the row are responses · click a title to highlight it</text>` + body;
     clearHighlights();
+  }
+
+  /**
+   * Move each connection label to a nearby spot where it covers no component and no other label.
+   * Labels with no free spot stay hidden until their connection is hovered or highlighted.
+   */
+  function declutterLabels() {
+    const boxes = [...svg.querySelectorAll('[data-box]')].map((n) => {
+      const [x, y, w, h] = n.dataset.box.split(',').map(Number);
+      return { x: x - 4, y: y - 4, w: w + 8, h: h + 8 };
+    });
+    const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    const placed = [];
+    svg.querySelectorAll('.edge-label-wrap').forEach((wrap) => {
+      const badge = wrap.querySelector('.hop-badge');
+      if (badge) {
+        const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(badge.getAttribute('transform') || '');
+        if (m) placed.push({ x: +m[1] - 12, y: +m[2] - 12, w: 24, h: 24 });
+      }
+      const t = wrap.querySelector('.arch-edge-label');
+      if (!t) return;
+      const x0 = Number(t.getAttribute('x'));
+      const y0 = Number(t.getAttribute('y'));
+      const tries = [];
+      [0, -13, 13, -26, 26, -39, 39].forEach((dy) => [0, -28, 28, -56, 56].forEach((dx) => tries.push([dx, dy])));
+      tries.sort((a, b) => Math.hypot(a[0], a[1] * 1.6) - Math.hypot(b[0], b[1] * 1.6));
+      let free = false;
+      for (const [dx, dy] of tries) {
+        t.setAttribute('x', x0 + dx);
+        t.setAttribute('y', y0 + dy);
+        const b = t.getBBox();
+        const box = { x: b.x - 4, y: b.y - 2, w: b.width + 8, h: b.height + 4 };
+        if (!boxes.some((o) => hit(o, box)) && !placed.some((o) => hit(o, box))) {
+          placed.push(box);
+          free = true;
+          break;
+        }
+      }
+      if (!free) { t.setAttribute('x', x0); t.setAttribute('y', y0); }
+      wrap.classList.toggle('crowded', !free);
+    });
   }
 
   function render() {
     if (state.layout === 'paths') renderPathView();
     else renderSVG();
     svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    declutterLabels();
     bindPulses();
     const seg = byId('arch-layout');
     if (seg) seg.querySelectorAll('[data-layout]').forEach((b) => b.classList.toggle('on', b.dataset.layout === state.layout));
@@ -587,6 +652,17 @@ const DesignGraph = (() => {
 
   function applyView() {
     svg.setAttribute('viewBox', `${state.view.x} ${state.view.y} ${state.view.w} ${state.view.h}`);
+    const v = state.view;
+    const more = v.x + v.w < state.W - 4 || v.y + v.h < state.H - 4;
+    const canvas = svg.parentElement;
+    let hint = canvas.querySelector('.arch-more');
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.className = 'arch-more';
+      hint.textContent = 'Drag to see more →';
+      canvas.appendChild(hint);
+    }
+    hint.classList.toggle('on', more);
     const label = byId('arch-zoom');
     if (label) label.textContent = Math.round((state.W / state.view.w) * 100) + '%';
   }
@@ -619,10 +695,29 @@ const DesignGraph = (() => {
     state.raf = requestAnimationFrame(tick);
   }
 
+  // below this zoom the canvas text becomes hard to read, so large maps open partly visible instead
+  const MIN_READABLE_SCALE = 0.9;
+
+  function drawingArea() {
+    const r = svg.getBoundingClientRect();
+    const cs = getComputedStyle(svg);
+    return {
+      cw: r.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+      ch: r.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
+    };
+  }
+
+  /** Fit the whole map if it stays readable; otherwise open at a readable zoom from the top-left. */
   function resetView(immediate = false) {
-    state.target = { x: 0, y: 0, w: state.W, h: state.H };
+    let w = state.W, h = state.H;
+    const { cw, ch } = drawingArea();
+    if (cw > 0 && ch > 0 && Math.min(cw / w, ch / h) < MIN_READABLE_SCALE) {
+      w = cw / MIN_READABLE_SCALE;
+      h = ch / MIN_READABLE_SCALE;
+    }
+    state.target = { x: 0, y: 0, w, h };
     if (immediate) {
-      state.view = { x: 0, y: 0, w: state.W, h: state.H };
+      state.view = { x: 0, y: 0, w, h };
       applyView();
       return;
     }
@@ -678,7 +773,7 @@ const DesignGraph = (() => {
   function clearHighlights() {
     if (!svg) return;
     svg.querySelectorAll('[data-node]').forEach((el) => el.classList.remove('dim', 'hot', 'fail', 'warn', 'selected'));
-    svg.querySelectorAll('.arch-edge-group').forEach((el) => el.classList.remove('dim', 'hot', 'fail', 'warn', 'flowing'));
+    svg.querySelectorAll('.arch-edge-group, .edge-label-wrap').forEach((el) => el.classList.remove('dim', 'hot', 'fail', 'warn', 'flowing', 'peek'));
     svg.querySelectorAll('.path-row').forEach((el) => el.classList.remove('off'));
   }
 
@@ -691,7 +786,7 @@ const DesignGraph = (() => {
       el.classList.toggle('dim', !active);
       if (active) el.classList.add(mode === 'fail' ? 'fail' : 'hot');
     });
-    svg.querySelectorAll('.arch-edge-group').forEach((el) => {
+    svg.querySelectorAll('.arch-edge-group, .edge-label-wrap').forEach((el) => {
       const active = edges.has(Number(el.dataset.edge));
       el.classList.toggle('dim', !active);
       if (active) el.classList.add(mode === 'fail' ? 'fail' : (mode === 'flow' ? 'flowing' : 'hot'));
@@ -759,7 +854,7 @@ const DesignGraph = (() => {
       el.classList.toggle('dim', !on);
       if (on) el.classList.add('warn');
     });
-    svg.querySelectorAll('.arch-edge-group').forEach((el) => el.classList.add('dim'));
+    svg.querySelectorAll('.arch-edge-group, .edge-label-wrap').forEach((el) => el.classList.add('dim'));
     renderInspector();
     emit();
   }
@@ -996,6 +1091,8 @@ const DesignGraph = (() => {
     getGraph: () => state.g,
     setLayout,
     setRoute,
+    /** Re-place labels and re-fit once the canvas is actually visible. */
+    relayout: () => { if (state.g && svg && svg.getBoundingClientRect().width) { declutterLabels(); resetView(true); } },
     setExpanded,
     conceptCard,
     shapeIcon,

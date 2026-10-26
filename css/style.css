@@ -2479,3 +2479,52 @@ body.map-wide.sidebar-peek #btn-sidebar { color: var(--text); }
 .rw-pill { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 99px; font-size: 9px; letter-spacing: .1em; border: 1px solid; }
 .rw-pill.rw-write { color: #f6b86b; border-color: #5a4220; background: #241a0e; }
 .rw-pill.rw-read { color: #7fd6c4; border-color: #1f4a45; background: #0d2422; }
+
+/* ============================================================
+   Canvas text: large, high-contrast, always on top
+   ============================================================ */
+#arch-svg text { text-rendering: geometricPrecision; }
+#arch-svg .arch-node .arch-node-label { font-family: var(--sans); font-size: 14px; font-weight: 650; fill: #f4f7fc; }
+#arch-svg .arch-node .arch-node-sub { font-family: var(--sans); font-size: 11.5px; font-weight: 500; fill: #b4c1d4; }
+#arch-svg .arch-node .arch-node-badge { font-size: 9.5px; letter-spacing: .1em; opacity: 1; }
+#arch-svg .arch-layer { font-size: 12px; font-weight: 700; letter-spacing: .14em; opacity: 1; }
+
+/* connection labels sit in their own top layer with a dark outline */
+#arch-svg .edge-labels { pointer-events: auto; }
+#arch-svg .edge-label-wrap { cursor: pointer; transition: opacity .14s ease; }
+#arch-svg .edge-label-wrap .arch-edge-label {
+  font-family: var(--sans); font-size: 11.5px; font-weight: 600;
+  paint-order: stroke; stroke: #070b12; stroke-width: 5px; stroke-linejoin: round;
+}
+#arch-svg .edge-label-wrap.sync .arch-edge-label { fill: #b9d9ff; }
+#arch-svg .edge-label-wrap.async .arch-edge-label { fill: #f6d68c; }
+#arch-svg .edge-label-wrap.return .arch-edge-label { fill: #a8f2de; }
+#arch-svg .edge-label-wrap.dim { opacity: .12; }
+#arch-svg .edge-label-wrap.hot .arch-edge-label,
+#arch-svg .edge-label-wrap.flowing .arch-edge-label,
+#arch-svg .edge-label-wrap.peek .arch-edge-label { fill: #ffffff; }
+/* labels that could not find a free spot appear when their connection is hovered or highlighted */
+#arch-svg .edge-label-wrap.crowded .arch-edge-label { opacity: 0; }
+#arch-svg .edge-label-wrap.crowded.hot .arch-edge-label,
+#arch-svg .edge-label-wrap.crowded.flowing .arch-edge-label,
+#arch-svg .edge-label-wrap.crowded.peek .arch-edge-label { opacity: 1; }
+
+/* hop numbers in the User actions view */
+#arch-svg .hop-badge circle { fill: #0b111a; stroke: #63a4ff; stroke-width: 1.6; }
+#arch-svg .hop-badge text { font-family: var(--sans); font-size: 11.5px; font-weight: 800; fill: #e6efff; }
+#arch-svg .edge-label-wrap.async .hop-badge circle { stroke: #e3b24f; }
+#arch-svg .edge-label-wrap.return .hop-badge circle { stroke: #7ee0c2; }
+#arch-svg .path-row-title { font-size: 14px; font-weight: 700; fill: #e4eeff; }
+#arch-svg .rw-tag { font-size: 10.5px; }
+
+/* the pan hint */
+.arch-more {
+  position: absolute; right: 14px; bottom: 14px; z-index: 4; display: none;
+  padding: 6px 11px; border-radius: 99px; border: 1px solid #2a3446;
+  background: rgba(14, 20, 30, .9); color: #c3d2e8; font-size: 12px; font-weight: 600; pointer-events: none;
+}
+.arch-more.on { display: block; }
+
+/* Brief: the Task column grows on large screens */
+.brief-grid { grid-template-columns: clamp(320px, 30vw, 560px) minmax(0, 1fr); max-width: 1920px; }
+@media (max-width: 1180px) { .brief-grid { grid-template-columns: minmax(0, 1fr); } }

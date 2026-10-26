@@ -365,7 +365,10 @@ const DesignStudy = (() => {
     if (next === 'brief' && typeof DesignGraph !== 'undefined') DesignGraph.setExpanded(false);
     render();
     window.dispatchEvent(new Event('resize'));
-    if (typeof DesignGraph !== 'undefined') DesignGraph.clearFocus();
+    if (typeof DesignGraph !== 'undefined') {
+      DesignGraph.clearFocus();
+      if (next === 'map') DesignGraph.relayout();
+    }
     if (typeof AIChat !== 'undefined') AIChat.refresh();
   }
 
