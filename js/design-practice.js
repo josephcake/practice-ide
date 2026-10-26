@@ -184,17 +184,41 @@ const DesignPractice = (() => {
   /* ================= TOOLKIT ================= */
   const PRESETS = {
     'url-shortener': { writes: 100e6, ratio: 100, bytes: 500, years: 10, peak: 3, what: 'new short links' },
-    instagram: { writes: 100e6, ratio: 200, bytes: 2e6, years: 10, peak: 3, what: 'new posts (media)' },
-    gmail: { writes: 10e9, ratio: 3, bytes: 75e3, years: 10, peak: 2, what: 'emails received' },
-    uber: { writes: 21.6e9, ratio: 1, bytes: 100, years: 1, peak: 3, what: 'driver GPS pings (1M drivers / 4 s)' },
-    ledger: { writes: 50e6, ratio: 10, bytes: 1000, years: 7, peak: 5, what: 'transfers' },
-    'core-bank': { writes: 20e6, ratio: 20, bytes: 1000, years: 10, peak: 4, what: 'postings' },
-    'fintech-platform': { writes: 30e6, ratio: 20, bytes: 1000, years: 7, peak: 4, what: 'money movements' },
-    'gsr-notification-service': { writes: 100e6, ratio: 1, bytes: 2000, years: 2, peak: 5, what: 'notifications' },
+    pastebin: { writes: 5e6, ratio: 10, bytes: 10e3, years: 5, peak: 3, what: 'new pastes' },
+    webhook: { writes: 1.5e9, ratio: 1, bytes: 2000, years: 0.1, peak: 4, what: 'events to deliver' },
+    typeahead: { writes: 10e9, ratio: 5, bytes: 50, years: 0.1, peak: 3, what: 'searches (5 keystroke calls each)' },
+    tinder: { writes: 2e9, ratio: 1, bytes: 40, years: 2, peak: 4, what: 'swipes' },
+    leetcode: { writes: 15e6, ratio: 2, bytes: 4000, years: 5, peak: 10, what: 'submissions' },
     'rate-limiter': { writes: 4.3e9, ratio: 1, bytes: 64, years: 0.003, peak: 3, what: 'API requests (each is a counter write)' },
-    cache: { writes: 1.7e9, ratio: 10, bytes: 2000, years: 0.003, peak: 2, what: 'writes (reads are 200k/s)' },
-    'market-data': { writes: 2e9, ratio: 10000, bytes: 100, years: 1, peak: 5, what: 'price ticks (each fanned out to 10k)' },
-    'deepseek-inference': { writes: 500e6, ratio: 1, bytes: 8000, years: 1, peak: 3, what: 'API requests' }
+    'google-calendar': { writes: 200e6, ratio: 20, bytes: 1000, years: 10, peak: 3, what: 'event edits' },
+    twitter: { writes: 500e6, ratio: 100, bytes: 300, years: 10, peak: 3, what: 'tweets' },
+    yelp: { writes: 1e6, ratio: 500, bytes: 2000, years: 10, peak: 3, what: 'new reviews' },
+    netflix: { writes: 1e3, ratio: 1e7, bytes: 5e9, years: 10, peak: 2, what: 'new titles (watched millions of times)' },
+    robinhood: { writes: 50e6, ratio: 20, bytes: 500, years: 7, peak: 10, what: 'orders' },
+    dropbox: { writes: 1e9, ratio: 3, bytes: 4e6, years: 10, peak: 3, what: 'chunk uploads (4 MB)' },
+    'google-docs': { writes: 50e9, ratio: 5, bytes: 50, years: 10, peak: 3, what: 'edit operations' },
+    ticketmaster: { writes: 2e6, ratio: 200, bytes: 500, years: 5, peak: 50, what: 'ticket purchases' },
+    'live-comments': { writes: 500e6, ratio: 5e5, bytes: 200, years: 1, peak: 10, what: 'comments (each fanned out)' },
+    'news-aggregator': { writes: 2e6, ratio: 1000, bytes: 20e3, years: 5, peak: 3, what: 'articles' },
+    'post-search': { writes: 500e6, ratio: 20, bytes: 500, years: 10, peak: 3, what: 'new posts to index' },
+    gopuff: { writes: 1e6, ratio: 100, bytes: 2000, years: 5, peak: 4, what: 'orders' },
+    'online-auction': { writes: 100e6, ratio: 100, bytes: 200, years: 5, peak: 20, what: 'bids' },
+    'metrics-monitoring': { writes: 8.6e12, ratio: 0.01, bytes: 2, years: 0.08, peak: 2, what: 'data points (compressed)' },
+    'job-scheduler': { writes: 500e6, ratio: 3, bytes: 1000, years: 1, peak: 10, what: 'job runs' },
+    'payment-system': { writes: 300e6, ratio: 5, bytes: 1500, years: 7, peak: 5, what: 'payments' },
+    'web-crawler': { writes: 170e6, ratio: 1, bytes: 100e3, years: 1, peak: 1, what: 'pages fetched' },
+    'ad-click-aggregator': { writes: 10e9, ratio: 0.001, bytes: 200, years: 2, peak: 5, what: 'ad clicks' },
+    'top-k': { writes: 86e9, ratio: 0.0001, bytes: 50, years: 0.01, peak: 3, what: 'view events' },
+    uber: { writes: 21.6e9, ratio: 1, bytes: 100, years: 1, peak: 3, what: 'driver GPS pings (1M drivers / 4 s)' },
+    'pub-sub': { writes: 86e9, ratio: 5, bytes: 1000, years: 0.02, peak: 2, what: 'messages (7-day retention)' },
+    'chat-app': { writes: 100e9, ratio: 2, bytes: 200, years: 5, peak: 3, what: 'messages' },
+    youtube: { writes: 30e3, ratio: 3e4, bytes: 1e9, years: 10, peak: 2, what: 'uploads (avg 1 GB)' },
+    'news-feed': { writes: 1e9, ratio: 200, bytes: 1000, years: 5, peak: 3, what: 'new posts' },
+    instagram: { writes: 100e6, ratio: 200, bytes: 2e6, years: 10, peak: 3, what: 'new photos' },
+    'distributed-cache': { writes: 400e9, ratio: 10, bytes: 2000, years: 0.003, peak: 2, what: 'cache writes' },
+    'kv-store': { writes: 200e9, ratio: 1, bytes: 1000, years: 1, peak: 2, what: 'key writes' },
+    'google-maps': { writes: 50e9, ratio: 0.1, bytes: 100, years: 0.01, peak: 3, what: 'traffic speed reports' },
+    'core-bank': { writes: 20e6, ratio: 20, bytes: 1000, years: 10, peak: 4, what: 'postings' }
   };
   const DEFAULT = { writes: 10e6, ratio: 10, bytes: 1000, years: 5, peak: 3, what: 'writes' };
 
@@ -313,5 +337,5 @@ const DesignPractice = (() => {
     };
   }
 
-  return { renderLearn, renderPractice, renderToolkit, numbersHTML };
+  return { renderLearn, renderPractice, renderToolkit, numbersHTML, conceptsFor };
 })();

@@ -9,8 +9,8 @@
 const CONCEPTS = [
   /* ---------------- clients and edge ---------------- */
   {
-    id: 'client', name: 'Client', kind: 'component', shape: 'client',
-    match: /\b(client|browser|mobile|app|rider|driver|participant|subscriber|user|recipient|trader|regulator|builder ui|ide)\b/,
+    id: 'client', name: 'Client', kind: 'component', shape: 'client', plain: "The app or website a person uses: the starting and ending point of every request.",
+    match: /\b(client|browser|app|user)\b/,
     what: 'Whatever a human or program uses to talk to your system: a browser, a phone app, an SDK, a trading terminal.',
     why: 'Every design starts and ends here. The request path begins at the client and the response must make it back.',
     tradeoffs: ['Logic in the client (optimistic UI, local cache) feels fast but cannot be trusted for money or security.', 'Thin clients are easy to update; thick clients work offline.'],
@@ -18,8 +18,8 @@ const CONCEPTS = [
     alt: 'Server-rendered pages vs rich clients'
   },
   {
-    id: 'cdn', name: 'CDN', kind: 'component', shape: 'edge',
-    match: /\bcdn\b|edge media/, aliases: ['CDN', 'origin shield', 'origin shielding'],
+    id: 'cdn', name: 'CDN', kind: 'component', shape: 'edge', plain: "Copies of files stored on servers all over the world, so images and videos load from somewhere close to you instead of far away.",
+    match: /\bcdn\b|edge cache|edge fill/, aliases: ['CDN', 'origin shield', 'origin shielding'],
     what: 'A network of servers close to users that caches static bytes (images, video, JS) and serves them without touching your origin.',
     why: 'Physics: a round trip across an ocean is ~150 ms. Serving from 20 ms away makes media fast and removes most origin load.',
     tradeoffs: ['Cached content is hard to take down instantly (purges take seconds to minutes).', 'Costs scale with egress bytes.', 'Signed URLs are needed for private content.'],
@@ -30,8 +30,8 @@ const CONCEPTS = [
     protect: "Use multiple CDNs, an origin shield, and placeholder images so pages still render."
   },
   {
-    id: 'gateway', name: 'API gateway', kind: 'component', shape: 'edge',
-    match: /gateway|channel api|\bedge\b|ingest gateway|order gateway/, aliases: ['API gateway', 'gateway'],
+    id: 'gateway', name: 'API gateway', kind: 'component', shape: 'edge', plain: "The front door for all requests: it checks who you are, blocks abuse, and sends each request to the right service.",
+    match: /api gateway|^gateway|ingest gateway|channel api|ingest api|click handler|payment api/, aliases: ['API gateway', 'gateway'],
     what: 'The single front door for API traffic: terminates TLS, authenticates, rate-limits, and routes each request to the right service.',
     why: 'Cross-cutting concerns live in one place instead of being re-implemented (and forgotten) in every service.',
     tradeoffs: ['An extra network hop (usually < 1 ms).', 'A shared component every team depends on: needs high availability.', 'Too much business logic here turns it into a monolith.'],
@@ -42,7 +42,7 @@ const CONCEPTS = [
     protect: "Run several stateless gateway instances behind a load balancer across zones, and keep business logic out of it."
   },
   {
-    id: 'lb', name: 'Load balancer', kind: 'component', shape: 'edge',
+    id: 'lb', name: 'Load balancer', kind: 'component', shape: 'edge', plain: "A traffic director that spreads requests across many identical servers so no single one gets overloaded.",
     match: /load balanc/, aliases: ['load balancer', 'load balancing'],
     what: 'Spreads incoming connections across many identical servers and stops sending traffic to unhealthy ones.',
     why: 'Lets you scale horizontally and survive a server dying without users noticing.',
@@ -54,8 +54,8 @@ const CONCEPTS = [
     protect: "Run redundant load balancers (active/active), with fast health checks and DNS failover."
   },
   {
-    id: 'proxy', name: 'Reverse proxy / preview router', kind: 'component', shape: 'edge',
-    match: /preview|proxy/,
+    id: 'proxy', name: 'Reverse proxy / preview router', kind: 'component', shape: 'edge', plain: "A middleman server that forwards a public web address to the right machine behind the scenes.",
+    match: /proxy|preview/,
     what: 'Routes a public URL to a process running somewhere inside your fleet (for example port 5000 inside a user sandbox).',
     why: 'Gives every project a stable, authenticated URL without exposing internal hosts.',
     tradeoffs: ['Must re-route when the backend moves.', 'Long-lived connections (WebSocket, HMR) need special care.'],
@@ -68,8 +68,8 @@ const CONCEPTS = [
 
   /* ---------------- async ---------------- */
   {
-    id: 'dlq', name: 'Dead-letter queue', kind: 'component', shape: 'queue',
-    match: /dead-letter|\bdlq\b|poison/, aliases: ['dead-letter queue', 'DLQ', 'poison message'],
+    id: 'dlq', name: 'Dead-letter queue', kind: 'component', shape: 'queue', plain: "A holding area for messages that keep failing, so they stop blocking everything else and can be looked at later.",
+    match: /dead.letter|\bdlq\b/, aliases: ['dead-letter queue', 'DLQ', 'poison message'],
     what: 'A side queue where messages go after they fail too many times.',
     why: 'One malformed message cannot block the whole queue or retry forever, and you keep it to inspect and replay.',
     tradeoffs: ['Someone has to watch and drain it.', 'Replay must be idempotent.'],
@@ -80,8 +80,8 @@ const CONCEPTS = [
     protect: "Alert on DLQ growth, make it durable, and provide a safe replay tool."
   },
   {
-    id: 'ring', name: 'Ring buffer', kind: 'component', shape: 'queue',
-    match: /ring buffer|ring\b/, aliases: ['ring buffer'],
+    id: 'ring', name: 'Ring buffer', kind: 'component', shape: 'queue', plain: "A fixed-size circular list that one part of a program writes into and another reads from, extremely fast.",
+    match: /ring buffer/, aliases: ['ring buffer'],
     what: 'A fixed-size circular array that a producer writes into and consumers read from by sequence number, with no locks or allocation.',
     why: 'Moves millions of messages per second between threads with predictable microsecond latency.',
     tradeoffs: ['Fixed capacity: a slow reader forces a policy (block, drop, or detach).', 'Harder to reason about than a plain queue.'],
@@ -92,7 +92,7 @@ const CONCEPTS = [
     protect: "Detach slow readers, size the buffer for bursts, and resnapshot consumers that fall behind."
   },
   {
-    id: 'outbox', name: 'Transactional outbox', kind: 'component', shape: 'queue',
+    id: 'outbox', name: 'Transactional outbox', kind: 'component', shape: 'queue', plain: "Saving \"announce this later\" in the same step as the main change, so a crash can never save one without the other.",
     match: /outbox/, aliases: ['transactional outbox', 'outbox', 'dual-write', 'dual write'],
     what: 'Write the business change and an "event to publish" row in the same database transaction; a relay later publishes those rows to the message bus.',
     why: 'Solves the dual-write problem: you can never commit the payment but lose the event (or send the event for a payment that rolled back).',
@@ -104,8 +104,8 @@ const CONCEPTS = [
     protect: "Alert on outbox lag, make the relay restartable from the last published row, and keep consumers idempotent."
   },
   {
-    id: 'workers', name: 'Worker pool', kind: 'component', shape: 'service',
-    match: /workers?\b|transcod|batch|settlement|reporting|relay/,
+    id: 'workers', name: 'Worker pool', kind: 'component', shape: 'service', plain: "Background programs that pick up slow tasks (sending emails, processing videos) so the user doesn't wait for them.",
+    match: /worker|transcod|encoder|batch|recount|settlement|expiry|rollup|fetcher|indexer|builder|image processing|parser|writers?$|tile builder/,
     what: 'Stateless processes that pull jobs from a queue and do the slow work (send email, transcode video, settle payments).',
     why: 'Keeps slow or flaky work off the user request path, and scales independently by queue depth.',
     tradeoffs: ['Results are eventually consistent.', 'Retries need idempotency and backoff.'],
@@ -117,8 +117,8 @@ const CONCEPTS = [
   },
 
   {
-    id: 'stream', name: 'Event log / message bus', kind: 'component', shape: 'queue',
-    match: /kafka|event bus|click stream|firehose|bus\b|invalidation|cdc|transaction events|trade events|events\b|stream(er)?\b|fan-out|fanout|delivery queue|request queue|priority queue|queue\b|feed fan/,
+    id: 'stream', name: 'Event log / message bus', kind: 'component', shape: 'queue', plain: "A shared, ordered list of events that services write to and read from at their own speed, like a conveyor belt.",
+    match: /kafka|stream|queue|\bbus\b|events$|event channel|fan-out|frontier|pipeline|invalidation|search log|hinted|anti-entropy|price channel|engagement/,
     aliases: ['Kafka', 'message queue', 'event bus', 'message bus', 'pub/sub'],
     what: 'A durable, ordered log of events. Producers append; many consumers read at their own pace using an offset.',
     why: 'Decouples services in time and speed: the producer does not wait for, or break because of, slow consumers. Lets you replay history.',
@@ -131,8 +131,8 @@ const CONCEPTS = [
   },
   /* ---------------- data ---------------- */
   {
-    id: 'cache', name: 'Cache (Redis / Memcached)', kind: 'component', shape: 'cache',
-    match: /cache|redis|counter store|feed cache|kv \/ prompt|prefix/,
+    id: 'cache', name: 'Cache (Redis / Memcached)', kind: 'component', shape: 'cache', plain: "A fast, temporary copy of popular data kept in memory, so most requests never touch the slower database.",
+    match: /cache|redis|counter store|single-flight/,
     aliases: ['cache', 'Redis', 'Memcached', 'cache-aside', 'read-through', 'write-through', 'hit ratio'],
     what: 'An in-memory key-value store that keeps hot data close to the service so most reads never touch the database.',
     why: 'Memory reads take ~0.1 ms vs several ms for a database, and a 99% hit ratio means the database sees 100× fewer reads.',
@@ -144,8 +144,8 @@ const CONCEPTS = [
     protect: "Replicate the cache, coalesce identical requests (single-flight), and keep a circuit breaker that sheds load from the database."
   },
   {
-    id: 'objectstore', name: 'Object storage', kind: 'component', shape: 'db',
-    match: /object store|blob|media|project files|model store|weights/,
+    id: 'objectstore', name: 'Object storage', kind: 'component', shape: 'db', plain: "Cheap, very durable storage for big files like photos, videos, and backups.",
+    match: /object storage|blob|raw uploads|video segments|origin storage|tile storage|page store|raw event lake/,
     aliases: ['object storage', 'S3', 'blob storage'],
     what: 'Stores large immutable files (photos, video, raw emails, model weights) by key, cheaply and durably.',
     why: 'Large bytes do not belong in your database. Object stores give 11 nines of durability at a fraction of the cost.',
@@ -157,8 +157,8 @@ const CONCEPTS = [
     protect: "Use a managed store with cross-region replication, and let the CDN keep serving cached copies."
   },
   {
-    id: 'search', name: 'Search index', kind: 'component', shape: 'db',
-    match: /search index|inverted index|\bindex\b|search\b/, aliases: ['inverted index', 'Elasticsearch', 'search index'],
+    id: 'search', name: 'Search index', kind: 'component', shape: 'db', plain: "A pre-built index (like the one at the back of a book) that finds matching items instantly instead of reading everything.",
+    match: /search|index shards|real-time index|tag index/, aliases: ['inverted index', 'Elasticsearch', 'search index'],
     what: 'An inverted index that maps each word to the documents containing it, so text queries answer in milliseconds.',
     why: 'A LIKE query over billions of rows is a full scan. An index turns it into a few lookups.',
     tradeoffs: ['Updated asynchronously, so newly written data is not searchable for a moment.', 'Large and expensive to rebuild.'],
@@ -169,8 +169,8 @@ const CONCEPTS = [
     protect: "Degrade gracefully (show recent items from the database), and keep the index rebuildable from the source of truth."
   },
   {
-    id: 'geo', name: 'Geospatial index', kind: 'component', shape: 'db',
-    match: /geospatial|h3|geohash/, aliases: ['geohash', 'H3', 'geospatial index'],
+    id: 'geo', name: 'Geospatial index', kind: 'component', shape: 'db', plain: "A map index that answers \"what is near this point?\" by dividing the world into small cells.",
+    match: /geo index|geospatial|zone service/, aliases: ['geohash', 'H3', 'geospatial index'],
     what: 'Divides the map into cells (hexagons or squares) so "drivers near me" becomes a lookup of a few neighbouring cells.',
     why: 'Computing the distance to a million drivers per request is impossible; cell lookups make it O(nearby).',
     tradeoffs: ['Cell size is a trade-off: too big returns too many candidates, too small misses neighbours.', 'Moving objects need constant reindexing.'],
@@ -181,8 +181,8 @@ const CONCEPTS = [
     protect: "Shard by city, replicate in memory, and rebuild quickly from the live location stream."
   },
   {
-    id: 'ledger', name: 'Ledger (double-entry)', kind: 'component', shape: 'db',
-    match: /ledger|entries log|journal|core ledger/, aliases: ['double-entry', 'ledger', 'append-only', 'journal', 'write-ahead log'],
+    id: 'ledger', name: 'Ledger (double-entry)', kind: 'component', shape: 'db', plain: "An accounting record where every movement of money is written as matching debits and credits, and nothing is ever erased.",
+    match: /ledger/, aliases: ['double-entry', 'ledger', 'append-only', 'journal', 'write-ahead log'],
     what: 'An append-only record where every money movement is at least two entries (debit and credit) that sum to zero.',
     why: 'Money can never be created or lost silently, every balance is explainable, and history is never edited, only reversed.',
     tradeoffs: ['Grows forever: needs snapshots and archiving.', 'Strong consistency limits write throughput on hot accounts.'],
@@ -193,8 +193,8 @@ const CONCEPTS = [
     protect: "Use synchronous replication, idempotent retries, a read-only mode for balances, and continuous reconciliation."
   },
   {
-    id: 'idem', name: 'Idempotency store', kind: 'component', shape: 'db',
-    match: /idempot|dedupe/, aliases: ['idempotency key', 'idempotency', 'idempotent', 'dedupe', 'deduplication'],
+    id: 'idem', name: 'Idempotency store', kind: 'component', shape: 'db', plain: "A memory of requests already handled, so if the same request is sent twice, it only happens once.",
+    match: /idempot/, aliases: ['idempotency key', 'idempotency', 'idempotent', 'dedupe', 'deduplication'],
     what: 'Remembers each request\'s unique key and the result it produced, so a retry returns the same result instead of repeating the action.',
     why: 'Networks time out. Without it, a retried "send $25" sends $50.',
     tradeoffs: ['Extra write per request.', 'Keys need a retention window.', 'Key choice matters: too broad blocks legitimate repeats.'],
@@ -205,8 +205,8 @@ const CONCEPTS = [
     protect: "Store keys in the same database transaction as the result, and fail closed for money-moving requests."
   },
   {
-    id: 'warehouse', name: 'Data warehouse', kind: 'component', shape: 'db',
-    match: /warehouse|\bdw\b/, aliases: ['data warehouse', 'change data capture'],
+    id: 'warehouse', name: 'Data warehouse', kind: 'component', shape: 'db', plain: "A separate copy of the data built for big reports, so analysts never slow down the live system.",
+    match: /data warehouse|\bdw\b/, aliases: ['data warehouse', 'change data capture'],
     what: 'A separate analytical database, fed by change data capture, for reports and heavy queries.',
     why: 'Analysts and regulators can scan years of data without slowing down the production database.',
     tradeoffs: ['Data lags production by minutes to hours.', 'Another copy to secure and reconcile.'],
@@ -217,8 +217,8 @@ const CONCEPTS = [
     protect: "Make CDC replayable so the warehouse can catch up, and show data freshness on reports."
   },
   {
-    id: 'database', name: 'Database', kind: 'component', shape: 'db',
-    match: /\bdb\b|database|store\b|mapping|accounts|positions|snapshot|metadata|trip store|config|preferences|templates|persistent fs|delivery store|package cache|order book|book\b|files\b/,
+    id: 'database', name: 'Database', kind: 'component', shape: 'db', plain: "The permanent place where the system's data is saved; everything else can be rebuilt from it.",
+    match: /\bdb\b|database|store$|store\b|metadata|inventory|subscriptions|test cases|snapshots|buckets|road graph|popular sources|inbox|attendee|rules config|trending layer|storage engine|replica nodes/,
     aliases: ['sharded', 'sharding', 'shard', 'replica', 'replication', 'ACID', 'Postgres'],
     what: 'The durable source of truth. Relational databases (Postgres, MySQL) give transactions; key-value stores (DynamoDB, Cassandra) give simple, massive scale.',
     why: 'Everything else (caches, indexes, queues) can be rebuilt. The database is what must not lose data.',
@@ -232,8 +232,8 @@ const CONCEPTS = [
 
   /* ---------------- observability ---------------- */
   {
-    id: 'obs', name: 'Observability (metrics, logs, traces)', kind: 'component', shape: 'obs',
-    match: /metric|trace|observab|audit|dashboard|lag \/ gaps|latency \/ depth|slo/, aliases: ['p99', 'SLO', 'tail latency', 'tracing'],
+    id: 'obs', name: 'Observability (metrics, logs, traces)', kind: 'component', shape: 'obs', plain: "Dashboards and alerts that show how the system is doing and wake someone up when it breaks.",
+    match: /metric|monitor|dashboard|health/, aliases: ['p99', 'SLO', 'tail latency', 'tracing'],
     what: 'Metrics (numbers over time), logs (events), and traces (one request across services) that tell you what the system is doing.',
     why: 'You cannot fix what you cannot see. Interviewers expect you to name the metric that would page you.',
     tradeoffs: ['High-cardinality metrics get expensive.', 'Sampling traces saves money but can miss rare failures.'],
@@ -246,8 +246,8 @@ const CONCEPTS = [
 
   /* ---------------- services ---------------- */
   {
-    id: 'ratelimiter', name: 'Rate limiter', kind: 'component', shape: 'service',
-    match: /limiter|fallback|local bucket/, aliases: ['token bucket', 'leaky bucket', 'sliding window', 'rate limit', 'rate-limit'],
+    id: 'ratelimiter', name: 'Rate limiter', kind: 'component', shape: 'service', plain: "A counter that stops any one user from sending too many requests too fast.",
+    match: /limiter|local fallback|politeness/, aliases: ['token bucket', 'leaky bucket', 'sliding window', 'rate limit', 'rate-limit'],
     what: 'Counts requests per key (user, API key, IP) and rejects ones over the limit with HTTP 429.',
     why: 'Protects your system from abuse and noisy neighbours, and enforces paid plan limits.',
     tradeoffs: ['Central counters are accurate but add a network hop; local counters are fast but approximate.', 'Fail-open risks abuse; fail-closed risks an outage.'],
@@ -258,8 +258,8 @@ const CONCEPTS = [
     protect: "Keep a local in-process fallback bucket, and decide fail-open or fail-closed per route."
   },
   {
-    id: 'idgen', name: 'ID generator', kind: 'component', shape: 'service',
-    match: /allocator|idgen|code alloc/, aliases: ['base62', 'Snowflake'],
+    id: 'idgen', name: 'ID generator', kind: 'component', shape: 'service', plain: "A component that hands out unique numbers or codes, so no two items ever get the same one.",
+    match: /allocator|id generator/, aliases: ['base62', 'Snowflake'],
     what: 'Hands out unique IDs (or short codes) without every request coordinating on one global counter.',
     why: 'A single counter is a bottleneck and single point of failure. Pre-allocated ranges or time-based IDs scale.',
     tradeoffs: ['Ranges leave gaps when a node dies.', 'Time-based IDs depend on clocks.', 'Sequential IDs are guessable.'],
@@ -270,8 +270,8 @@ const CONCEPTS = [
     protect: "Pre-allocate ID ranges locally, and fall back to time-based IDs (Snowflake style)."
   },
   {
-    id: 'sequencer', name: 'Sequencer / single writer', kind: 'component', shape: 'service',
-    match: /sequencer|matching engine|matcher/, aliases: ['sequencer', 'sequence number', 'single writer', 'single-writer', 'deterministic replay'],
+    id: 'sequencer', name: 'Sequencer / single writer', kind: 'component', shape: 'service', plain: "A single component that puts every incoming request in one official order, so everyone agrees on what happened first.",
+    match: /sequencer|matching engine|leader broker|message service|bid service/, aliases: ['sequencer', 'sequence number', 'single writer', 'single-writer', 'deterministic replay'],
     what: 'One component that stamps every input with an increasing sequence number and processes them in that order on one thread.',
     why: 'Defines one true order, so there are no locks or races, and replaying the same inputs reproduces the exact same state.',
     tradeoffs: ['One thread caps throughput per shard (shard by symbol or account).', 'Needs fast failover to a hot replica.'],
@@ -282,8 +282,8 @@ const CONCEPTS = [
     protect: "Keep a hot replica replaying the same journal and promote it after verifying the last sequence number."
   },
   {
-    id: 'replica', name: 'Hot replica', kind: 'component', shape: 'db',
-    match: /replica/,
+    id: 'replica', name: 'Hot replica', kind: 'component', shape: 'db', plain: "A live backup copy that can take over immediately if the original machine dies.",
+    match: /replica|follower/,
     what: 'A standby copy that applies the same inputs and is ready to take over instantly.',
     why: 'Failover in milliseconds instead of rebuilding state from scratch.',
     tradeoffs: ['Double the hardware.', 'Lagging replicas lose recent data on failover.'],
@@ -294,8 +294,8 @@ const CONCEPTS = [
     protect: "Alert on replica lag and block promotion until the replica has caught up."
   },
   {
-    id: 'risk', name: 'Risk / fraud engine', kind: 'component', shape: 'service',
-    match: /risk|fraud|aml|limit checks|kyc|identity/, aliases: ['pre-trade', 'fraud'],
+    id: 'risk', name: 'Risk / fraud engine', kind: 'component', shape: 'service', plain: "Automatic checks that catch fraud, abuse, or rule-breaking before the action goes through.",
+    match: /risk|fraud|aml|buying power|moderation/, aliases: ['pre-trade', 'fraud'],
     what: 'Scores or checks each transaction against rules and models before (and after) money moves.',
     why: 'Stopping a bad transaction is far cheaper than recovering money after it settled.',
     tradeoffs: ['Every check adds latency to the critical path.', 'False positives block real customers.'],
@@ -306,8 +306,8 @@ const CONCEPTS = [
     protect: "Fail closed for high-risk or high-value paths, cache simple rules locally, and review after the fact."
   },
   {
-    id: 'scheduler', name: 'Scheduler', kind: 'component', shape: 'service',
-    match: /scheduler|dispatch|matching\b/, aliases: ['continuous batching', 'bin packing'],
+    id: 'scheduler', name: 'Scheduler', kind: 'component', shape: 'service', plain: "The part that decides what work runs when and where, such as which driver gets which ride.",
+    match: /scheduler|dispatch|^matching$/, aliases: ['continuous batching', 'bin packing'],
     what: 'Decides what runs where and when: placing containers on machines, batching GPU requests, or offering trips to drivers.',
     why: 'Good placement keeps hardware busy and users waiting less.',
     tradeoffs: ['Optimal scheduling is expensive; greedy is fast and usually good enough.', 'Fairness vs utilisation.'],
@@ -318,8 +318,8 @@ const CONCEPTS = [
     protect: "Run schedulers in leader/standby mode, and let running work keep going during a scheduler outage."
   },
   {
-    id: 'sandbox', name: 'Sandbox / container runtime', kind: 'component', shape: 'service',
-    match: /sandbox|container|microvm|gpu workers/,
+    id: 'sandbox', name: 'Sandbox / container runtime', kind: 'component', shape: 'service', plain: "A locked-down box where untrusted code can run without being able to harm anything else.",
+    match: /sandbox|container|microvm|judge/,
     what: 'An isolated environment with CPU, memory, and network limits where untrusted code runs.',
     why: 'User or AI-generated code must never touch the host or other users.',
     tradeoffs: ['Stronger isolation (microVMs) is slower to start than containers.', 'Warm pools cut cold starts but waste idle capacity.'],
@@ -330,7 +330,7 @@ const CONCEPTS = [
     protect: "Restart automatically, restore from the last snapshot, and keep warm spares."
   },
   {
-    id: 'collab', name: 'Real-time collaboration (CRDT / OT)', kind: 'component', shape: 'service',
+    id: 'collab', name: 'Real-time collaboration (CRDT / OT)', kind: 'component', shape: 'service', plain: "The part that merges edits from several people typing at once so everyone ends up with the same document.",
     match: /collab|crdt/, aliases: ['CRDT', 'operational transform'],
     what: 'Merges edits from several people typing at once so everyone converges on the same document.',
     why: 'Locking a file for one editor kills collaboration.',
@@ -342,7 +342,7 @@ const CONCEPTS = [
     protect: "Keep edits locally and resync when the connection returns. CRDTs make that merge automatic."
   },
   {
-    id: 'llm', name: 'Model inference', kind: 'component', shape: 'service',
+    id: 'llm', name: 'Model inference', kind: 'component', shape: 'service', plain: "The AI model that reads a prompt and writes a response.",
     match: /codegen model|\bllm\b/, aliases: ['KV cache', 'prefill', 'decode'],
     what: 'Runs a large language model: prefill reads the prompt, decode generates tokens one by one.',
     why: 'The core of any AI product; also its biggest cost and latency driver.',
@@ -354,8 +354,8 @@ const CONCEPTS = [
     protect: "Stream partial output, retry on another replica if no tokens have been sent yet, and keep a fallback model."
   },
   {
-    id: 'provider', name: 'External provider adapter', kind: 'component', shape: 'external',
-    match: /provider|exchange feed|market data|smtp/,
+    id: 'provider', name: 'External provider adapter', kind: 'component', shape: 'external', plain: "An outside company or system you depend on (a card network, an SMS vendor, an exchange) that you don't control.",
+    match: /provider|market data|broker gateway|websites|^sources$|advertiser site|customer server|job targets/,
     what: 'Wraps a third party (SMS vendor, card network, exchange feed, email servers) behind your own interface.',
     why: 'You cannot control their uptime. An adapter lets you add timeouts, circuit breakers, and a second vendor.',
     tradeoffs: ['Lowest-common-denominator API across vendors.', 'Two vendors double integration work.'],
@@ -366,7 +366,7 @@ const CONCEPTS = [
     protect: "Add a circuit breaker, a second vendor to fail over to, and a queue that drains when the vendor recovers."
   },
   {
-    id: 'service', name: 'Application service', kind: 'component', shape: 'service',
+    id: 'service', name: 'Application service', kind: 'component', shape: 'service', plain: "A program that owns one job in the system (like posting tweets) and can be run as many copies as needed.",
     match: /.*/,
     what: 'Stateless code that owns one piece of business logic and talks to its data stores.',
     why: 'Stateless services scale by adding copies behind a load balancer, and fail without losing data.',
@@ -379,75 +379,275 @@ const CONCEPTS = [
   },
 
   /* ---------------- patterns (not boxes, but you must explain them) ---------------- */
-  { id: 'p-cb', name: 'Circuit breaker', kind: 'pattern', aliases: ['circuit breaker', 'circuit breakers'],
+  { id: 'p-cb', name: 'Circuit breaker', kind: 'pattern', plain: "If a dependency keeps failing, stop calling it for a while instead of piling up more failed requests.", aliases: ['circuit breaker', 'circuit breakers'],
     what: 'After repeated failures to a dependency, stop calling it for a while and fail fast or use a fallback.',
     why: 'Prevents a slow dependency from tying up all your threads and taking you down with it.',
     tradeoffs: ['Needs tuning: too eager trips on blips, too lazy does not help.'], usedBy: ['Netflix Hystrix', 'resilience4j', 'Envoy'] },
-  { id: 'p-backoff', name: 'Exponential backoff with jitter', kind: 'pattern', aliases: ['backoff', 'jitter', 'jittered'],
+  { id: 'p-backoff', name: 'Exponential backoff with jitter', kind: 'pattern', plain: "After a failure, wait a bit longer before each retry, plus a random amount, so everyone doesn't retry at the same instant.", aliases: ['backoff', 'jitter', 'jittered'],
     what: 'Wait longer after each failed retry (1 s, 2 s, 4 s …) plus a random offset.',
     why: 'Stops thousands of clients retrying in lockstep and hammering a recovering service.',
     tradeoffs: ['Slower recovery for individual requests.'], usedBy: ['AWS SDKs', 'gRPC', 'Every robust client'] },
-  { id: 'p-stampede', name: 'Cache stampede / single-flight', kind: 'pattern', aliases: ['stampede', 'thundering herd', 'single-flight', 'request coalescing', 'coalescing'],
+  { id: 'p-stampede', name: 'Cache stampede / single-flight', kind: 'pattern', plain: "When a popular cached item expires, let one request reload it while the others wait, instead of all hitting the database.", aliases: ['stampede', 'thundering herd', 'single-flight', 'request coalescing', 'coalescing'],
     what: 'When a hot key expires, many requests miss at once. Single-flight lets one request load it while the rest wait for that result.',
     why: 'Without it, a cache expiry can send 10,000 identical queries to the database in one second.',
     tradeoffs: ['Waiting requests add latency for one load.'], usedBy: ['Go singleflight', 'Meta memcache leases', 'NGINX proxy_cache_lock'] },
-  { id: 'p-hotkey', name: 'Hot key / hot shard', kind: 'pattern', aliases: ['hot key', 'hot keys', 'hot shard', 'hot account', 'hot accounts', 'celebrity'],
+  { id: 'p-hotkey', name: 'Hot key / hot shard', kind: 'pattern', plain: "One item (a viral post, a celebrity) gets so much traffic that the one machine holding it is overwhelmed.", aliases: ['hot key', 'hot keys', 'hot shard', 'hot account', 'hot accounts', 'celebrity'],
     what: 'One key (a viral link, a celebrity, a busy account) gets far more traffic than any shard can handle.',
     why: 'Sharding spreads keys, not load. One hot key still lands on one shard.',
     tradeoffs: ['Replicating the key or splitting it adds complexity.'], usedBy: ['Twitter celebrity timelines', 'Instagram', 'DynamoDB adaptive capacity'] },
-  { id: 'p-consistent-hash', name: 'Consistent hashing', kind: 'pattern', aliases: ['consistent hashing'],
+  { id: 'p-consistent-hash', name: 'Consistent hashing', kind: 'pattern', plain: "A way of assigning data to machines so that adding or removing a machine only moves a small slice of the data.", aliases: ['consistent hashing'],
     what: 'Places keys and servers on a ring; each key belongs to the next server clockwise.',
     why: 'Adding or removing a server moves only about 1/N of the keys instead of nearly all of them.',
     tradeoffs: ['Needs virtual nodes to spread evenly.'], usedBy: ['Amazon Dynamo', 'Cassandra', 'Discord', 'Memcached clients'] },
-  { id: 'p-fanout', name: 'Fan-out on write vs read', kind: 'pattern', aliases: ['fan-out on write', 'fan out on write', 'fan-out on read', 'hybrid fan-out'],
+  { id: 'p-fanout', name: 'Fan-out on write vs read', kind: 'pattern', plain: "Either copy a new post into every follower's feed right away (write), or gather posts when someone opens their feed (read).", aliases: ['fan-out on write', 'fan out on write', 'fan-out on read', 'hybrid fan-out'],
     what: 'Write: push each new post into every follower\'s feed at post time. Read: build the feed by pulling from followees at read time.',
     why: 'Write makes reads instant but explodes for celebrities; read is cheap to write but slow to read. Big feeds use a hybrid.',
     tradeoffs: ['Storage and write amplification vs read latency.'], usedBy: ['Twitter timelines', 'Instagram feed', 'LinkedIn feed'] },
-  { id: 'p-conflation', name: 'Conflation', kind: 'pattern', aliases: ['conflation', 'conflate', 'conflates'],
+  { id: 'p-conflation', name: 'Conflation', kind: 'pattern', plain: "When someone is behind, skip the old updates and just send the latest value.", aliases: ['conflation', 'conflate', 'conflates'],
     what: 'When a consumer falls behind, skip intermediate updates and send only the latest value per key.',
     why: 'For prices, only the current price matters; a growing backlog of stale ticks is worse than useless.',
     tradeoffs: ['Lossy: wrong for consumers that need every event.'], usedBy: ['Market-data distributors', 'Bloomberg terminals', 'Game state sync'] },
-  { id: 'p-snapshot-delta', name: 'Snapshot + delta', kind: 'pattern', aliases: ['snapshot + delta', 'snapshot plus delta', 'resnapshot'],
+  { id: 'p-snapshot-delta', name: 'Snapshot + delta', kind: 'pattern', plain: "Give a newcomer the full current picture first, then only the changes after that.", aliases: ['snapshot + delta', 'snapshot plus delta', 'resnapshot'],
     what: 'A new consumer first receives the full current state with a sequence number, then only changes after that number.',
     why: 'Joining mid-stream without replaying all history, and without a gap.',
     tradeoffs: ['Must buffer deltas during the snapshot to avoid a race.'], usedBy: ['Exchange market data', 'Kafka compacted topics', 'Firebase'] },
-  { id: 'p-backpressure', name: 'Backpressure', kind: 'pattern', aliases: ['backpressure'],
+  { id: 'p-backpressure', name: 'Backpressure', kind: 'pattern', plain: "When a consumer can't keep up, slow the producer down instead of letting work pile up until something crashes.", aliases: ['backpressure'],
     what: 'A slow consumer signals the producer to slow down (or the producer stops when a bounded buffer is full).',
     why: 'Unbounded queues end in out-of-memory crashes.',
     tradeoffs: ['Slows the producer; sometimes dropping is better.'], usedBy: ['TCP flow control', 'Reactive Streams', 'Kafka consumers'] },
-  { id: 'p-delivery', name: 'At-least-once vs exactly-once', kind: 'pattern', aliases: ['at-least-once', 'exactly-once', 'at most once'],
+  { id: 'p-delivery', name: 'At-least-once vs exactly-once', kind: 'pattern', plain: "\"At least once\" means a message may arrive twice but is never lost; receivers must handle duplicates.", aliases: ['at-least-once', 'exactly-once', 'at most once'],
     what: 'At-least-once: messages may repeat but are never lost. Exactly-once across systems is practically "at-least-once + idempotent consumer".',
     why: 'Interviewers test whether you know exactly-once delivery across a network is not a free guarantee.',
     tradeoffs: ['Dedupe storage and logic on the consumer.'], usedBy: ['Kafka', 'SQS', 'Payment webhooks'] },
-  { id: 'p-saga', name: 'Saga vs two-phase commit', kind: 'pattern', aliases: ['saga', '2PC', 'two-phase commit', 'compensating'],
+  { id: 'p-saga', name: 'Saga vs two-phase commit', kind: 'pattern', plain: "Doing a multi-step change across systems one step at a time, with an \"undo\" step for each if a later step fails.", aliases: ['saga', '2PC', 'two-phase commit', 'compensating'],
     what: '2PC locks all participants until everyone agrees. A saga runs local steps one by one and undoes earlier ones with compensating actions if a later step fails.',
     why: 'Cross-service or cross-shard money movement needs one of them.',
     tradeoffs: ['2PC: consistent but blocking. Saga: available but temporarily inconsistent.'], usedBy: ['Uber Cadence / Temporal workflows', 'Bank transfers across systems'] },
-  { id: 'p-event-sourcing', name: 'Event sourcing', kind: 'pattern', aliases: ['event sourcing', 'event-sourced'],
+  { id: 'p-event-sourcing', name: 'Event sourcing', kind: 'pattern', plain: "Saving every event that happened as the source of truth, and calculating the current state from them.", aliases: ['event sourcing', 'event-sourced'],
     what: 'Store the list of events (trade happened) as the source of truth; current state is a fold over them.',
     why: 'Full audit trail, and you can rebuild state or compute new views from history.',
     tradeoffs: ['Replay gets slow without snapshots; schema evolution of events is hard.'], usedBy: ['Trading and risk systems', 'LMAX', 'Accounting systems'] },
-  { id: 'p-consistency', name: 'Strong vs eventual consistency', kind: 'pattern', aliases: ['eventual consistency', 'eventually consistent', 'strong consistency', 'strongly consistent', 'staleness'],
+  { id: 'p-consistency', name: 'Strong vs eventual consistency', kind: 'pattern', plain: "Strong: everyone sees the latest data immediately. Eventual: some people may see slightly old data for a moment.", aliases: ['eventual consistency', 'eventually consistent', 'strong consistency', 'strongly consistent', 'staleness'],
     what: 'Strong: every read sees the latest write. Eventual: reads may be briefly stale but converge.',
     why: 'Money and inventory need strong; likes, feeds, and counts can be eventual. Saying which data needs which is a senior signal.',
     tradeoffs: ['Strong costs latency and availability during partitions (CAP).'], usedBy: ['Spanner (strong)', 'DynamoDB (both)', 'Cassandra (tunable)'] },
-  { id: 'p-failopen', name: 'Fail-open vs fail-closed', kind: 'pattern', aliases: ['fail-open', 'fail open', 'fail-closed', 'fail closed'],
+  { id: 'p-failopen', name: 'Fail-open vs fail-closed', kind: 'pattern', plain: "When a safety check is broken, either let everything through (open) or block everything (closed).", aliases: ['fail-open', 'fail open', 'fail-closed', 'fail closed'],
     what: 'When a safety dependency is down, fail-open lets traffic through; fail-closed blocks it.',
     why: 'Rate limits for reads usually fail open; money movement and risk limits fail closed.',
     tradeoffs: ['Availability vs safety. Say which and why per path.'], usedBy: ['Rate limiters', 'Fraud checks', 'Auth systems'] },
-  { id: 'p-cdc', name: 'Change data capture', kind: 'pattern', aliases: ['CDC'],
+  { id: 'p-cdc', name: 'Change data capture', kind: 'pattern', plain: "Watching the database's change history and forwarding every change to other systems automatically.", aliases: ['CDC'],
     what: 'Read the database\'s commit log and stream every change to other systems (caches, search, warehouse).',
     why: 'Keeps derived systems in sync without the application doing extra writes.',
     tradeoffs: ['Derived systems lag slightly.'], usedBy: ['Debezium', 'LinkedIn Databus', 'DynamoDB Streams'] },
-  { id: 'p-ttl', name: 'TTL (time to live)', kind: 'pattern', aliases: ['TTL', 'TTLs'],
+  { id: 'p-ttl', name: 'TTL (time to live)', kind: 'pattern', plain: "An expiry time on stored data, after which it is thrown away automatically.", aliases: ['TTL', 'TTLs'],
     what: 'An expiry time on a cached value or record, after which it is dropped.',
     why: 'A safety net that bounds how stale cached data can get, even if invalidation is missed.',
     tradeoffs: ['Short TTL: fresher, more misses. Long TTL: fewer misses, staler.'], usedBy: ['Redis', 'DNS', 'CDNs'] },
-  { id: 'p-reconcile', name: 'Reconciliation', kind: 'pattern', aliases: ['reconciliation', 'reconcile'],
+  { id: 'p-reconcile', name: 'Reconciliation', kind: 'pattern', plain: "Regularly comparing your records with someone else's (like a bank statement) and investigating any difference.", aliases: ['reconciliation', 'reconcile'],
     what: 'Regularly compare two records of the same truth (your ledger vs the bank statement) and flag differences.',
     why: 'Protocols fail in ways you did not predict; reconciliation catches what slipped through.',
     tradeoffs: ['Someone has to investigate breaks.'], usedBy: ['Every payments company and bank'] }
 ];
+
+
+/* ---------------- added for the full problem set ---------------- */
+CONCEPTS.push(
+  { id: 'websocket', name: 'Real-time connection server', kind: 'component', shape: 'edge',
+    match: /websocket|\bws gateway|chat gateways?|edge servers/, aliases: ['WebSocket', 'WebSockets', 'SSE', 'long-poll', 'long-lived connection'],
+    plain: 'A server that keeps an open line to each phone or browser so it can push updates instantly, instead of waiting to be asked.',
+    what: 'Holds a long-lived connection (WebSocket or server-sent events) per device and pushes messages down it.',
+    why: 'Chat, live prices, and collaboration need updates in milliseconds; polling every second is slow and wasteful.',
+    tradeoffs: ['Each server holds many open connections, so you need a registry of who is connected where.', 'Reconnect storms after a crash must be smoothed with jitter.'],
+    usedBy: ['WhatsApp', 'Slack', 'Discord', 'Figma'], alt: 'Polling or long-polling (simpler, slower)',
+    without: 'Clients have to ask "anything new?" over and over. Updates arrive late and servers waste work answering "no".',
+    breaks: 'Every device connected to that server drops at once and tries to reconnect.',
+    protect: 'Reconnect with backoff and jitter to another server, and resume from the last message the device saw.' },
+  { id: 'waitingroom', name: 'Virtual waiting room', kind: 'component', shape: 'edge',
+    match: /waiting room/, aliases: ['waiting room'],
+    plain: 'A queue page that lets people into a busy site a few at a time, like a line outside a store.',
+    what: 'Holds visitors in an online queue and admits them at a rate the backend can handle.',
+    why: 'A ticket on-sale sends millions of people in the same second; without a line, the site falls over for everyone.',
+    tradeoffs: ['Users wait, which feels slow.', 'The queue itself must be very simple and very scalable.'],
+    usedBy: ['Ticketmaster Smart Queue', 'Queue-it', 'Cloudflare Waiting Room'], alt: 'Overprovisioning for the peak (expensive)',
+    without: 'The whole burst hits the booking system at once, which slows or crashes for everyone.',
+    breaks: 'Nobody can get in, or everyone floods in at once.',
+    protect: 'Run it as static pages and signed tokens on a CDN, and fail closed (keep people waiting) rather than open.' },
+  { id: 'trie', name: 'Trie (prefix tree)', kind: 'component', shape: 'db',
+    match: /trie/, aliases: ['trie', 'prefix tree'],
+    plain: 'A tree of letters where each path spells a word, so finding everything that starts with "ca" is one short walk.',
+    what: 'Stores strings by their characters, one level per letter; each node can also keep its most popular completions.',
+    why: 'Autocomplete needs "all words starting with this prefix" in a few milliseconds.',
+    tradeoffs: ['Uses a lot of memory for large vocabularies.', 'Updating rankings is easier to do in batch rebuilds.'],
+    usedBy: ['Google search suggestions', 'IDE autocomplete', 'Elasticsearch completion suggester'], alt: 'Prefix queries on a sorted list',
+    without: 'Every keystroke would scan millions of terms, far too slow to keep up with typing.',
+    breaks: 'Suggestions disappear, but search itself still works.',
+    protect: 'Replicate shards, keep the previous snapshot, and fall back to cached popular prefixes.' },
+  { id: 'applog', name: 'Append-only log', kind: 'component', shape: 'db',
+    match: /operation log|bid log|partition log|run history|delivery log/, aliases: ['append-only log', 'operation log', 'commit log'],
+    plain: 'A record you only ever add to at the end, like a diary, so you can replay exactly what happened.',
+    what: 'Stores every event or change in order; nothing is edited or deleted in place.',
+    why: 'It gives a full history, makes crashes recoverable by replay, and is fast to write.',
+    tradeoffs: ['Grows forever unless you snapshot and trim it.', 'Reading the current state means replaying or keeping a snapshot.'],
+    usedBy: ['Kafka', 'Google Docs history', 'Database write-ahead logs'], alt: 'Updating records in place (loses history)',
+    without: 'You only know the latest state. You cannot explain how you got there or rebuild after corruption.',
+    breaks: 'New changes cannot be recorded, so writes stop.',
+    protect: 'Replicate the log, and keep periodic snapshots so recovery does not replay from the beginning.' },
+  { id: 'sortedset', name: 'Sorted set (leaderboard)', kind: 'component', shape: 'cache',
+    match: /leaderboard/, aliases: ['sorted set', 'ZSET'],
+    plain: 'A list that keeps itself in order by score, so "who is in the top 10?" is instant.',
+    what: 'Stores members with a score and keeps them sorted, with fast rank and top-N queries.',
+    why: 'Leaderboards change constantly and are read constantly; re-sorting on every read is too slow.',
+    tradeoffs: ['Lives in memory, so very large boards cost RAM.', 'Ties need an explicit rule (such as time).'],
+    usedBy: ['Redis ZSET', 'Game leaderboards', 'LeetCode contests'], alt: 'Database ORDER BY (slow at scale)',
+    without: 'Every view of the leaderboard sorts all participants again.',
+    breaks: 'The live ranking freezes or disappears while scores are still being recorded.',
+    protect: 'Rebuild from the submission database and replicate the set.' },
+  { id: 'tsdb', name: 'Time-series database', kind: 'component', shape: 'db',
+    match: /time-series/, aliases: ['time-series database', 'TSDB'],
+    plain: 'A database built for numbers measured over time, like a heart-rate chart for every server.',
+    what: 'Stores timestamped values per series and compresses them heavily.',
+    why: 'Metrics arrive as millions of tiny points per second; general databases would be huge and slow.',
+    tradeoffs: ['Great for time-range queries, poor for arbitrary joins.', 'High-cardinality tags can explode the number of series.'],
+    usedBy: ['Prometheus', 'InfluxDB', 'Datadog', 'Uber M3'], alt: 'A general database (much larger and slower)',
+    without: 'Storing every point as a row would cost 10× more space and graphs would take minutes.',
+    breaks: 'Dashboards and alerts lose their data source; incidents go unseen.',
+    protect: 'Buffer writes in Kafka, replicate storage, and keep alerting on the live stream.' },
+  { id: 'olap', name: 'Analytics (OLAP) database', kind: 'component', shape: 'db',
+    match: /olap/, aliases: ['OLAP', 'columnar'],
+    plain: 'A database built to add up huge amounts of data quickly for charts and reports.',
+    what: 'Stores data by column so sums and group-bys over billions of rows are fast.',
+    why: 'Dashboards ask "total clicks per ad per minute"; row databases are slow at that.',
+    tradeoffs: ['Fast reads, slower individual updates.', 'Data usually arrives in batches or streams, not single rows.'],
+    usedBy: ['ClickHouse', 'Apache Druid', 'Apache Pinot', 'BigQuery'], alt: 'Pre-aggregated tables in a normal database',
+    without: 'Reports scan raw events every time and take minutes instead of milliseconds.',
+    breaks: 'Dashboards stop updating; raw data is still safe upstream.',
+    protect: 'Rebuild from the raw event store and replicate segments.' },
+  { id: 'bloom', name: 'Bloom filter (seen-set)', kind: 'component', shape: 'cache',
+    match: /seen-set|bloom/, aliases: ['Bloom filter', 'seen-set'],
+    plain: 'A tiny memory trick that answers "have I seen this before?" using very little space, with rare false alarms.',
+    what: 'A bit array plus hash functions; it can say "definitely not seen" or "probably seen".',
+    why: 'Checking billions of URLs or profiles against a full list would need huge memory.',
+    tradeoffs: ['Occasional false positives (skips something new).', 'Items cannot easily be removed.'],
+    usedBy: ['Web crawlers', 'Cassandra / HBase', 'Chrome Safe Browsing (historically)'], alt: 'A full hash set (exact, much larger)',
+    without: 'You either store a giant exact set or recrawl and reshow things repeatedly.',
+    breaks: 'Duplicates slip through until it is rebuilt.',
+    protect: 'Rebuild from the source of truth and keep an exact store for important checks.' },
+  { id: 'notifier', name: 'Push notifications', kind: 'component', shape: 'queue',
+    match: /notifier|push service|push \/ live/, aliases: ['push notification', 'APNs', 'FCM'],
+    plain: 'The service that sends the alerts you see on your phone\'s lock screen.',
+    what: 'Sends messages to phones through Apple (APNs) and Google (FCM), plus email or live connections.',
+    why: 'Users are often not in the app; notifications are how the system reaches them.',
+    tradeoffs: ['Delivery timing depends on Apple and Google.', 'Too many notifications annoy users.'],
+    usedBy: ['APNs', 'Firebase Cloud Messaging', 'OneSignal'], alt: 'Email only (slower)',
+    without: 'Users only find out about matches, messages, or reminders when they happen to open the app.',
+    breaks: 'Alerts are delayed or lost, but the underlying data is still correct.',
+    protect: 'Queue notifications, retry with backoff, and dedupe so retries do not spam.' },
+  { id: 'streamproc', name: 'Stream processor', kind: 'component', shape: 'service',
+    match: /stream processor|alert engine|^aggregator$|^merger$|sampler/, aliases: ['stream processing', 'Flink', 'watermark', 'watermarks', 'windowed'],
+    plain: 'A program that does math on data as it flows by, like a cashier counting customers as they walk in.',
+    what: 'Consumes an event stream continuously and computes counts, windows, or alerts in real time.',
+    why: 'Waiting for a nightly batch is too slow for dashboards, trending, and alerts.',
+    tradeoffs: ['Late and duplicate events need careful handling.', 'Stateful processing needs checkpoints to recover.'],
+    usedBy: ['Apache Flink', 'Kafka Streams', 'Spark Streaming', 'Google Dataflow'], alt: 'Periodic batch jobs',
+    without: 'Numbers are only updated by batch jobs, hours behind reality.',
+    breaks: 'Live numbers freeze and fall behind; the stream buffers the backlog.',
+    protect: 'Checkpoint state, scale on lag, and replay from the stream after recovery.' },
+  { id: 'ranker', name: 'Ranking service', kind: 'component', shape: 'service',
+    match: /ranker/, aliases: ['ranking', 'BM25'],
+    plain: 'The part that decides the order of results, putting the most useful or interesting items first.',
+    what: 'Scores candidate items with rules or a model and returns them in order.',
+    why: 'Showing items by time alone buries the good ones.',
+    tradeoffs: ['Better models cost more compute per request.', 'Optimizing only for clicks can reward low-quality content.'],
+    usedBy: ['Facebook News Feed', 'Google Search', 'LinkedIn feed'], alt: 'Simple reverse-chronological order',
+    without: 'Results appear in a plain order (newest first), so important items get lost.',
+    breaks: 'Results come back slowly or unranked.',
+    protect: 'Fall back to a simple order (such as newest first) and cache recent rankings.' },
+  { id: 'presence', name: 'Presence service', kind: 'component', shape: 'service',
+    match: /presence/, aliases: ['presence', 'heartbeat', 'heartbeats'],
+    plain: 'Keeps track of who is online right now, like the green dot next to a name.',
+    what: 'Tracks online status and cursor positions from frequent heartbeats that expire.',
+    why: 'People want to see who is here, but this data changes constantly and does not need to be stored forever.',
+    tradeoffs: ['Lossy by design: brief inaccuracies are acceptable.', 'Huge friend lists make status fan-out expensive.'],
+    usedBy: ['WhatsApp last seen', 'Slack status', 'Google Docs cursors'], alt: 'No presence',
+    without: 'Users cannot see who is online or where others are typing.',
+    breaks: 'Everyone looks offline, but messages and edits still work.',
+    protect: 'Keep it separate from messages so its failures never affect delivery.' },
+  { id: 'consensus', name: 'Cluster controller', kind: 'component', shape: 'service',
+    match: /controller|gossip|cluster config|group offsets/, aliases: ['consensus', 'Raft', 'leader election', 'gossip'],
+    plain: 'The part of a cluster that keeps everyone agreed on who is in charge of what.',
+    what: 'Tracks which machines are alive and which one leads each piece of data, using a consensus or gossip protocol.',
+    why: 'Without one agreed view, two machines might both think they own the same data.',
+    tradeoffs: ['Consensus needs a majority of nodes and adds coordination latency.', 'Gossip is cheap but converges slowly.'],
+    usedBy: ['ZooKeeper', 'etcd', 'Kafka KRaft', 'Cassandra gossip'], alt: 'Manual configuration (fragile)',
+    without: 'Failover needs a human, and split-brain (two leaders) becomes possible.',
+    breaks: 'Normal traffic may keep flowing, but failover and rebalancing stop.',
+    protect: 'Run an odd number of controller nodes across zones so a majority survives.' },
+  { id: 'featurestore', name: 'Feature store', kind: 'component', shape: 'db',
+    match: /feature store/, aliases: ['feature store'],
+    plain: 'A ready-made table of facts about users and items (like "Ana often likes Ben\'s posts") for ranking to read fast.',
+    what: 'Precomputes and serves signals used by machine-learning models at request time.',
+    why: 'Computing signals from raw history during a request would be far too slow.',
+    tradeoffs: ['Features can be slightly stale.', 'Training and serving features must stay consistent.'],
+    usedBy: ['Uber Michelangelo', 'Feast', 'Tecton'], alt: 'Computing features on the fly',
+    without: 'Ranking either uses weak signals or is slow.',
+    breaks: 'Ranking quality drops to defaults, but feeds still load.',
+    protect: 'Serve defaults for missing features and cache the hottest features.' },
+  { id: 'session', name: 'Session registry', kind: 'component', shape: 'cache',
+    match: /session registry/, aliases: ['session registry'],
+    plain: 'A lookup table of which server each user\'s phone is currently connected to.',
+    what: 'Maps user and device to the real-time server holding its connection.',
+    why: 'To push a message to someone you need to know which of thousands of servers they are on.',
+    tradeoffs: ['Must be updated on every connect and disconnect.', 'Stale entries need expiry.'],
+    usedBy: ['WhatsApp', 'Discord', 'Messenger'], alt: 'Broadcast to every server (wasteful)',
+    without: 'Every message would be broadcast to every server to find the recipient.',
+    breaks: 'Messages cannot be routed to online users and fall back to push notifications.',
+    protect: 'Keep entries with short TTLs refreshed by heartbeats, replicated in memory.' },
+  { id: 'p-quorum', name: 'Quorum reads and writes', kind: 'pattern', aliases: ['quorum', 'quorums', 'sloppy quorum', 'sloppy quorums'],
+    plain: 'Write to most copies and read from most copies, so at least one copy you read has the latest data.',
+    what: 'With N copies, a write waits for W of them and a read asks R of them; if R + W > N, reads see the latest write.',
+    why: 'Lets you choose per request between speed and consistency.',
+    tradeoffs: ['Higher R and W are safer but slower.'], usedBy: ['Cassandra', 'DynamoDB', 'Riak'] },
+  { id: 'p-lsm', name: 'LSM tree', kind: 'pattern', aliases: ['LSM tree', 'compaction', 'SSTables', 'memtable'],
+    plain: 'A storage design that writes everything in big sequential batches and tidies up later, which makes writes very fast.',
+    what: 'Writes go to memory and a log, flush to sorted files, and files are merged (compacted) in the background.',
+    why: 'Sequential writes are much faster than updating data in place.',
+    tradeoffs: ['Reads may check several files; compaction uses disk I/O.'], usedBy: ['RocksDB', 'Cassandra', 'LevelDB'] },
+  { id: 'p-sketch', name: 'Count-Min Sketch', kind: 'pattern', aliases: ['Count-Min Sketch', 'sketch'],
+    plain: 'A small fixed-size grid of counters that estimates how often things happened, without storing every item.',
+    what: 'Hashes each item into a few counters; the smallest of them estimates its count.',
+    why: 'Counting hundreds of millions of distinct items exactly would need huge memory.',
+    tradeoffs: ['Slightly overestimates rare items.'], usedBy: ['Trending systems', 'Network monitoring', 'Redis Bloom module'] },
+  { id: 'p-abr', name: 'Adaptive bitrate streaming', kind: 'pattern', aliases: ['adaptive bitrate', 'HLS', 'DASH', 'renditions', 'rendition'],
+    plain: 'The video player switches picture quality up or down every few seconds to match your internet speed, so it never stops to buffer.',
+    what: 'Video is cut into short segments at several qualities; the player picks the next segment\'s quality based on bandwidth.',
+    why: 'Network speed changes constantly, especially on phones.',
+    tradeoffs: ['Storing many qualities costs storage and encoding time.'], usedBy: ['Netflix', 'YouTube', 'Twitch'] },
+  { id: 'p-presigned', name: 'Pre-signed upload URL', kind: 'pattern', aliases: ['pre-signed', 'presigned', 'signed URL', 'signed URLs'],
+    plain: 'A temporary, secret link that lets an app upload or download a file directly from storage without going through your servers.',
+    what: 'The server signs a URL granting time-limited access to one object; the client uses it directly.',
+    why: 'Large files never pass through application servers.',
+    tradeoffs: ['Links must expire quickly and be scoped tightly.'], usedBy: ['Amazon S3', 'Google Cloud Storage', 'Dropbox'] },
+  { id: 'p-lease', name: 'Lease (lock with expiry)', kind: 'pattern', aliases: ['lease', 'leases', 'hold', 'holds'],
+    plain: 'A temporary claim that automatically runs out, like reserving a seat for 10 minutes.',
+    what: 'A lock that expires unless renewed, so a crashed holder cannot block others forever.',
+    why: 'Workers and buyers crash or walk away; expiry makes the system recover on its own.',
+    tradeoffs: ['Too short: duplicate work. Too long: slow recovery.'], usedBy: ['Job schedulers', 'Ticket holds', 'Chubby / etcd locks'] },
+  { id: 'p-conditional', name: 'Conditional update', kind: 'pattern', aliases: ['conditional update', 'conditional decrement', 'compare-and-set', 'optimistic locking'],
+    plain: 'Change something only if it still looks the way you expect, such as "mark this seat sold only if it is still available".',
+    what: 'An update with a condition, checked atomically by the database.',
+    why: 'Prevents two people from grabbing the same seat, item, or last token at the same moment.',
+    tradeoffs: ['Losers must retry or be told it is gone.'], usedBy: ['DynamoDB conditions', 'SQL WHERE + version', 'Redis Lua'] },
+  { id: 'p-cursor', name: 'Cursor pagination', kind: 'pattern', aliases: ['cursor pagination', 'cursor', 'cursors'],
+    plain: 'Asking for "the next page after this exact item" instead of "page 5", so new items never cause duplicates or gaps.',
+    what: 'Each page returns a pointer to the last item; the next request continues from it.',
+    why: 'Feeds change while you scroll; page numbers shift and repeat items.',
+    tradeoffs: ['You cannot jump straight to page 50.'], usedBy: ['Twitter API', 'Facebook Graph API', 'Slack API'] },
+  { id: 'p-geohash', name: 'Geohash / map cells', kind: 'pattern', aliases: ['geohash', 'S2', 'quadtree', 'cells'],
+    plain: 'Dividing the map into a grid of named squares or hexagons, so "near me" means "in my square and the ones next to it".',
+    what: 'Encodes a location as a cell id; nearby places share cell prefixes.',
+    why: 'Distance checks against every point are too slow at scale.',
+    tradeoffs: ['Cell size is a trade-off between precision and how many cells you search.'], usedBy: ['Uber H3', 'Google S2', 'Redis GEO'] }
+);
 
 /* ---------------- shapes ---------------- */
 const SHAPE_INFO = {
@@ -464,20 +664,65 @@ const SHAPE_INFO = {
 const ConceptLib = (() => {
   const byId = new Map(CONCEPTS.map((c) => [c.id, c]));
   const cache = new Map();
+  // specific building blocks are tested before generic ones like "database"
+  const FIRST = ['websocket', 'waitingroom', 'trie', 'applog', 'sortedset', 'tsdb', 'olap', 'bloom', 'notifier', 'streamproc',
+    'ranker', 'presence', 'consensus', 'featurestore', 'session', 'cdn', 'dlq', 'ring', 'outbox', 'idem', 'ledger', 'warehouse',
+    'objectstore', 'sandbox', 'collab', 'ratelimiter', 'idgen', 'replica', 'risk', 'geo'];
+  const ORDERED = [
+    ...FIRST.map((id) => byId.get(id)).filter(Boolean),
+    ...CONCEPTS.filter((c) => c.kind === 'component' && !FIRST.includes(c.id) && c.id !== 'service' && c.id !== 'client')
+  ];
+  // names that the rules would read the wrong way
+  const OVERRIDE = {
+    'Engagement|Data': 'database',
+    'Coordinator|Service': 'service',
+    'Query service|Service': 'service',
+    'Dashboards|Service': 'service',
+    'Waiting room|Edge': 'waitingroom',
+    'Edge servers|Edge': 'websocket',
+    'Price fan-out|Service': 'websocket',
+    'Fill events|Async': 'stream',
+    'Event service|Service': 'service',
+    'Invite service|Service': 'service',
+    'Event store|Data': 'database',
+    'Reminders|Async': 'scheduler',
+    'Event intake|Service': 'service',
+    'Subscriptions|Data': 'database',
+    'Webhook handler|Service': 'service',
+    'Reconciliation|Async': 'workers',
+    'Image processing|Async': 'workers',
+    'Clustering|Service': 'service',
+    'Hold expiry|Async': 'workers',
+    'Message store|Data': 'database',
+    'Matching|Service': 'scheduler',
+    'Judge queue|Async': 'stream',
+    'Trie builder|Service': 'workers',
+    'Metadata service|Service': 'service',
+    'Counters|Service': 'streamproc'
+  };
+
   function forNode(node) {
     if (!node) return null;
-    const key = node.id + '|' + node.label + '|' + node.sub;
+    const key = node.id + '|' + node.label + '|' + node.sub + '|' + node.layer;
     if (cache.has(key)) return cache.get(key);
-    const hay = `${node.id} ${node.label} ${node.sub}`.toLowerCase();
+    const label = String(node.label).toLowerCase();
+    const sub = String(node.sub).toLowerCase();
     let found = null;
-    for (const c of CONCEPTS) {
-      if (c.kind !== 'component' || c.id === 'service' || c.id === 'client') continue;
-      if (c.match.test(hay)) { found = c; break; }
+    const forced = OVERRIDE[node.label + '|' + node.layer];
+    if (forced) found = byId.get(forced);
+    else if (node.layer === 'Client' || node.layer === 'Consumers') {
+      found = byId.get('provider').match.test(label) ? byId.get('provider') : byId.get('client');
+    } else if (node.layer === 'Obs') {
+      found = byId.get('obs');
+    } else {
+      for (const text of [label, sub]) {
+        found = ORDERED.find((c) => c.match.test(text)) || null;
+        if (found) break;
+      }
     }
-    if (!found && (node.layer === 'Client' || node.layer === 'Consumers')) found = byId.get('client');
-    if (!found && node.layer === 'Obs') found = byId.get('obs');
     if (!found && node.layer === 'Data') found = byId.get('database');
     if (!found && node.layer === 'Async') found = byId.get('stream');
+    if (!found && node.layer === 'Edge') found = byId.get('gateway');
     if (!found) found = byId.get('service');
     cache.set(key, found);
     return found;
@@ -488,7 +733,7 @@ const ConceptLib = (() => {
     const c = forNode(node);
     const shape = c ? c.shape : 'service';
     switch (node.layer) {
-      case 'Client': case 'Consumers': return 'client';
+      case 'Client': case 'Consumers': return c && c.id === 'provider' ? 'external' : 'client';
       case 'Obs': return 'obs';
       case 'Edge': case 'Ingest': return 'edge';
       case 'Provider': return 'external';

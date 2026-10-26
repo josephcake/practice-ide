@@ -76,7 +76,7 @@ const DesignStudy = (() => {
   let st = null;
   let evalState = { loading: false, error: null, record: null };
   let timer = { left: 45 * 60, running: false, handle: null };
-  let pane, body, tabsEl, briefEl, inspectEl;
+  let pane, body, tabsEl, briefEl, inspectEl, termsEl;
 
   const isBehavioral = (q) => !!(q && q.noFramework);
   const stages = () => (isBehavioral(item) ? BEHAVIORAL_STAGES : DESIGN_STAGES);
@@ -135,7 +135,7 @@ const DesignStudy = (() => {
   function briefHTML() {
     const b = (typeof DESIGN_BRIEFS !== 'undefined' && DESIGN_BRIEFS[item.id]) || DESIGN_BRIEF_FALLBACK;
     return `<section class="ask-card">
-      <div class="ask-kicker">WHAT YOU ARE BEING ASKED</div>
+      <div class="ask-kicker">WHAT YOU ARE BEING ASKED${item.difficulty ? `<span class="diff-tag diff-${item.difficulty}">${{ easy: 'Easy', medium: 'Medium', hard: 'Hard' }[item.difficulty]}</span>` : ''}</div>
       <p class="ask-main">${esc(b.ask)}</p>
       ${b.examples.length ? `<div class="ask-h">For example, the system must handle:</div>
         <ul class="ask-examples">${b.examples.map((e) => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}
@@ -313,6 +313,7 @@ const DesignStudy = (() => {
     } else {
       briefEl.innerHTML = '';
       tabsEl.innerHTML = TABS.map(([k, l]) => `<button class="study-tab${st.tab === k ? ' on' : ''}" data-tab="${k}" type="button">${l}</button>`).join('');
+      renderTerms();
       const inspecting = st.tab === 'inspect';
       if (inspectEl) inspectEl.hidden = !inspecting;
       body.hidden = inspecting;
@@ -325,6 +326,22 @@ const DesignStudy = (() => {
       }
     }
     renderTimer();
+  }
+
+  /** Every technical term on this map, in one plain sentence each. Collapsed until opened. */
+  function renderTerms() {
+    if (!termsEl || !graph) { if (termsEl) termsEl.hidden = true; return; }
+    const { components, patterns } = DesignPractice.conceptsFor(item, graph);
+    const rows = [
+      ...components.map(({ c, nodes }) => ({ c, ids: nodes.map((n) => n.id) })),
+      ...patterns.map((c) => ({ c, ids: [] }))
+    ].filter(({ c }) => c.id !== 'client' && c.id !== 'service');
+    termsEl.hidden = !rows.length;
+    const wasOpen = termsEl.open || !!load('gs.terms.open', false);
+    termsEl.innerHTML = `<summary><span>Plain-English terms</span><i>${rows.length}</i></summary>
+      <dl class="terms-list">${rows.map(({ c, ids }) => `<div class="term-row${ids.length ? ' has-nodes' : ''}"${ids.length ? ` data-term-nodes="${esc(ids.join(','))}" title="Show on the map"` : ''}>
+        <dt>${esc(c.name)}</dt><dd>${esc(c.plain || c.what)}</dd></div>`).join('')}</dl>`;
+    termsEl.open = wasOpen;
   }
 
   function sizeAnswers() {
@@ -563,6 +580,14 @@ const DesignStudy = (() => {
     body = document.getElementById('study-body');
     tabsEl = document.getElementById('study-tabs');
     inspectEl = document.getElementById('study-inspect');
+    termsEl = document.getElementById('study-terms');
+    if (termsEl) {
+      termsEl.addEventListener('toggle', () => save('gs.terms.open', termsEl.open));
+      termsEl.addEventListener('click', (e) => {
+        const t = e.target.closest('[data-term-nodes]');
+        if (t && t.dataset.termNodes) DesignGraph.spotlight(t.dataset.termNodes.split(','));
+      });
+    }
     const side = document.querySelector('#arch-modal .arch-side');
     if (side && inspectEl) inspectEl.appendChild(side);
     tabsEl.addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab); });

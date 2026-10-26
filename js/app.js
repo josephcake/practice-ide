@@ -43,16 +43,13 @@ const DEFAULT_QUEUE_GS = [...new Set([
   'gs-lru-ttl', 'gs-parking-garage', 'gs-magic-potion',
   // scraped 2024-2026 set, appended to the end of the queue
   ...(typeof GS_SCRAPED !== 'undefined' ? GS_SCRAPED.map((q) => q.id) : []),
-  ...(typeof GS_SCRAPED_DESIGN !== 'undefined' ? GS_SCRAPED_DESIGN.map((q) => q.id) : []),
-  'concurrency-pool', 'order-book',
-  ...(typeof DESIGN_QUESTIONS !== 'undefined' ? DESIGN_QUESTIONS.map((q) => q.id) : [])
+  'concurrency-pool'
 ])];
 
 const DEFAULT_QUEUE = [
   'two-sum', 'valid-parens', 'best-time-stock', 'tree-bst', 'climb-stairs',
   'group-anagrams', 'lru-cache', 'concurrency-pool', 'debounce-throttle',
   'promise-combinators', 'js-traps', 'coin-change',
-  'order-book', 'ledger', 'rate-limiter'
 ];
 
 const state = {
@@ -106,10 +103,7 @@ const state = {
    ------------------------------------------------------------ */
 const QUEUE_SEED_KEY = 'gs.queue.seeded';
 function seedScrapedQueue() {
-  const scraped = [
-    ...(typeof GS_SCRAPED !== 'undefined' ? GS_SCRAPED : []),
-    ...(typeof GS_SCRAPED_DESIGN !== 'undefined' ? GS_SCRAPED_DESIGN : [])
-  ].map((q) => q.id);
+  const scraped = (typeof GS_SCRAPED !== 'undefined' ? GS_SCRAPED : []).map((q) => q.id);
   if (!scraped.length) return;
   const seeded = store.get(QUEUE_SEED_KEY, []);
   const fresh = scraped.filter((id) => !seeded.includes(id) && !state.queue.includes(id));
@@ -141,10 +135,6 @@ const senClass = (s) => (s === 'N/A' ? 'sen-na' : 'sen-' + String(s).toLowerCase
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const GS = (typeof GS_QUESTIONS !== 'undefined') ? GS_QUESTIONS.slice() : [];
 if (typeof GS_SCRAPED !== 'undefined') GS.push(...GS_SCRAPED);
-// design / behavioral entries join the existing design library in place
-if (typeof GS_SCRAPED_DESIGN !== 'undefined' && typeof DESIGN_QUESTIONS !== 'undefined') {
-  DESIGN_QUESTIONS.push(...GS_SCRAPED_DESIGN);
-}
 const ROUNDS = (typeof GS_ROUNDS !== 'undefined') ? GS_ROUNDS : [];
 const ALL_CODING = [...GS, ...QUESTIONS];
 const allItems = () => [...ALL_CODING, ...DESIGN_QUESTIONS];
@@ -378,15 +368,16 @@ function itemRow(item, design = false) {
 }
 
 
+const DIFF_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+
 function designRow(item) {
   const on = state.active && state.active.id === item.id ? ' on' : '';
   const done = state.done.has(item.id);
-  const hasMap = typeof DESIGN_GRAPHS !== 'undefined' && !!DESIGN_GRAPHS[item.id];
-  const ttl = [item.title, item.cat, hasMap ? 'interactive architecture' : 'open-ended / behavioral'].filter(Boolean).join(' · ');
-  return `<div class="item design-item${on}" data-id="${item.id}" title="${esc(ttl)}">
+  const diff = item.difficulty || 'hard';
+  return `<div class="item design-item${on}" data-id="${item.id}" title="${esc(item.title + ' · ' + DIFF_LABEL[diff])}">
     <span class="done-dot ${done ? '' : 'off'}"></span>
-    <span class="t">${esc(item.title)}</span>
-    <span class="lvl ${hasMap ? 'map' : ''}">${hasMap ? 'MAP' : 'D'}</span>
+    <span class="t">${esc(item.title.replace(/^Design (an? )?/, ''))}</span>
+    <span class="lvl diff-${diff}">${DIFF_LABEL[diff][0]}</span>
   </div>`;
 }
 
@@ -397,21 +388,17 @@ function renderDesignSidebar() {
   const q = (state.designSearch || '').trim().toLowerCase();
   const filtered = all.filter((item) => {
     if (!q) return true;
-    const hay = [item.title, item.prompt, item.cat, item.seniority, (item.topics || []).join(' ')].join(' ').toLowerCase();
+    const hay = [item.title, item.prompt, item.cat, item.difficulty, (item.topics || []).join(' ')].join(' ').toLowerCase();
     return hay.includes(q);
   });
-  const hasMap = (item) => typeof DESIGN_GRAPHS !== 'undefined' && !!DESIGN_GRAPHS[item.id];
-  const maps = filtered.filter((item) => hasMap(item));
-  const openItems = filtered.filter((item) => !hasMap(item));
   let html = '';
-  if (maps.length) {
-    html += `<div class="group-h">Architecture maps <span class="cnt">${maps.length}</span></div>`;
-    html += maps.map(designRow).join('');
-  }
-  if (openItems.length) {
-    html += `<div class="group-h">Behavioral / open-ended <span class="cnt">${openItems.length}</span></div>`;
-    html += openItems.map(designRow).join('');
-  }
+  ['easy', 'medium', 'hard'].forEach((d) => {
+    const group = filtered.filter((item) => (item.difficulty || 'hard') === d);
+    if (!group.length) return;
+    const doneCount = group.filter((item) => state.done.has(item.id)).length;
+    html += `<div class="group-h diff-h diff-${d}">${DIFF_LABEL[d]} <span class="cnt">${doneCount}/${group.length}</span></div>`;
+    html += group.map(designRow).join('');
+  });
   if (!html) html = '<div class="empty" style="padding:16px 8px">No design questions match.</div>';
   list.innerHTML = html;
   const count = $('#design-count');
@@ -998,7 +985,7 @@ function renderDoc() {
       ${item.added ? `<span class="tag tag-date" title="Date this question was added to this queue">added ${esc(item.added)}</span>` : ''}
       ${item.sourceDate ? `<span class="tag tag-date" title="Date the source was published">source ${esc(item.sourceDate)}</span>` : ''}
       ${item.tag ? `<span class="tag">${esc(item.tag)}</span>` : ''}
-      <span class="tag">${item.seniority === 'manager' ? 'Manager round' : RUBRIC[item.level] ? RUBRIC[item.level].label : 'Design'}</span>
+      <span class="tag">${item.difficulty ? DIFF_LABEL[item.difficulty] : item.seniority === 'manager' ? 'Manager round' : RUBRIC[item.level] ? RUBRIC[item.level].label : 'Design'}</span>
       ${item.complexity ? `<span class="tag">${esc(item.complexity)}</span>` : ''}
     </div>
     <div class="body-text">${formatBody(item.prompt)}</div>`;
@@ -1036,7 +1023,7 @@ function renderDoc() {
       <div class="sigbox">${esc(item.signature)}</div>`;
   }
 
-  if (RUBRIC[item.level] && item.seniority !== 'manager') {
+  if (RUBRIC[item.level] && item.seniority !== 'manager' && !item.difficulty) {
     html += `<div class="callout" style="margin-top:12px"><b>${esc(RUBRIC[item.level].label)}.</b> ${esc(RUBRIC[item.level].note)}</div>`;
   }
 
@@ -2232,11 +2219,11 @@ function openPlan() {
       <li><b>Arrays / hash maps</b> - Two Sum, Group Anagrams, Product Except Self. Near-certain.</li>
       <li><b>JavaScript specifics</b> - concurrency pool, debounce/throttle, Promise.all, LRU. Senior JS rounds live here.</li>
       <li><b>DP</b> - Coin Change and Climbing Stairs, because they touch money.</li>
-      <li><b>System design</b> - one standard (URL shortener or cache) plus one domain question (order book / risk / ledger).</li>
+      <li><b>System design</b> - one standard question (URL shortener, rate limiter) plus one harder one (payment system, Ticketmaster, chat).</li>
       <li><b>Behavioural</b> - be ready with 3 STAR stories: a production incident, a trade-off you argued for, a time you were wrong.</li>
     </ul></div>`,
     `<div class="section-h">If you have only one evening</div>`,
-    `<div class="callout">Do <b>Level 1 without hints</b>, then the three async questions, then read the order-book and risk hints out loud. That covers 80% of the surface. Do not try to grind LeetCode breadth - depth on what you already half-know is a better return.</div>`,
+    `<div class="callout">Do <b>Level 1 without hints</b>, then the three async questions, then do one Easy and one Medium system design in the Brief. That covers 80% of the surface. Do not try to grind LeetCode breadth - depth on what you already half-know is a better return.</div>`,
     `<div class="section-h">How to talk while you code</div>`,
     `<div class="plan-day"><ul>
       <li>Restate the problem and one example in your own words.</li>

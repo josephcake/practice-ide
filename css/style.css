@@ -2413,3 +2413,29 @@ body.map-wide.sidebar-peek #btn-sidebar { color: var(--text); }
 .design-views button { border-radius: 8px; padding: 5px 14px; }
 /* keep the diagram clear of the floating toolbar and legend */
 #arch-modal .arch-canvas #arch-svg { box-sizing: border-box; padding: 54px 10px 70px; }
+
+/* plain-English terms: collapsed strip at the top of the Map side panel */
+.terms-strip { flex: 0 0 auto; border-bottom: 1px solid var(--line); background: #0f1622; max-height: 46%; overflow-y: auto; }
+.terms-strip[hidden] { display: none; }
+.terms-strip summary { display: flex; align-items: center; gap: 8px; padding: 9px 14px; cursor: pointer; list-style: none; font-size: 12.5px; font-weight: 600; color: #cfe0ff; }
+.terms-strip summary::-webkit-details-marker { display: none; }
+.terms-strip summary::before { content: "▸"; font-size: 10px; color: var(--dim-2); transition: transform .12s; }
+.terms-strip[open] summary::before { transform: rotate(90deg); }
+.terms-strip summary i { font-style: normal; font-family: var(--mono); font-size: 10.5px; color: var(--dim-2); border: 1px solid var(--line); border-radius: 99px; padding: 0 7px; }
+.terms-list { margin: 0; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 5px; }
+.term-row { padding: 7px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line-soft); }
+.term-row.has-nodes { cursor: pointer; }
+.term-row.has-nodes:hover { border-color: #34507a; }
+.term-row dt { font-size: 12.5px; font-weight: 650; color: var(--text); }
+.term-row dd { margin: 2px 0 0; font-size: 12px; line-height: 1.5; color: #b9c7da; }
+
+/* difficulty labels */
+.diff-tag { margin-left: 8px; padding: 1px 7px; border-radius: 99px; font-size: 9.5px; letter-spacing: .08em; border: 1px solid; }
+.diff-easy { color: var(--cb-junior); border-color: #1f4a45; background: #0d2422; }
+.diff-medium { color: var(--cb-mid); border-color: #4a4021; background: #211d0f; }
+.diff-hard { color: #ff9a7a; border-color: #4a2b21; background: #241411; }
+.group-h.diff-h { border: 0; background: none; }
+.group-h.diff-h.diff-easy { color: var(--cb-junior); }
+.group-h.diff-h.diff-medium { color: var(--cb-mid); }
+.group-h.diff-h.diff-hard { color: #ff9a7a; }
+.design-item .lvl.diff-easy, .design-item .lvl.diff-medium, .design-item .lvl.diff-hard { min-width: 22px; text-align: center; }
