@@ -2476,9 +2476,16 @@ body.map-wide.sidebar-peek #btn-sidebar { color: var(--text); }
 .rw-tag { font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: .1em; }
 .rw-tag.rw-write { fill: #f6b86b; }
 .rw-tag.rw-read { fill: #7fd6c4; }
+.rw-tag.rw-bg { fill: #a9b1c7; }
 .rw-pill { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 99px; font-size: 9px; letter-spacing: .1em; border: 1px solid; }
 .rw-pill.rw-write { color: #f6b86b; border-color: #5a4220; background: #241a0e; }
 .rw-pill.rw-read { color: #7fd6c4; border-color: #1f4a45; background: #0d2422; }
+.rw-pill.rw-bg { color: #a9b1c7; border-color: #343a4c; background: #171a23; }
+.arch-based { margin-top: 14px; padding-top: 4px; border-top: 1px solid var(--border, #262a36); }
+.arch-based p { margin: 4px 0 6px; font-size: 13px; line-height: 1.5; color: var(--text, #e6e8ef); }
+.arch-based ul { margin: 0; padding-left: 16px; font-size: 12.5px; line-height: 1.7; }
+.arch-based a { color: #8fb4ff; text-decoration: none; }
+.arch-based a:hover { text-decoration: underline; }
 
 /* ============================================================
    Canvas text: large, high-contrast, always on top

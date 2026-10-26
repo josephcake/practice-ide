@@ -551,7 +551,7 @@ const DesignGraph = (() => {
       }).join('');
       body += `<g class="path-row" data-row="${r}">
         <rect class="path-row-bg" x="${left - 26}" y="${y0 - 8}" width="${W - left + 16}" height="${rowh - 14}" rx="10"></rect>
-        <text class="path-row-title" x="${left - 12}" y="${y0 + 12}" data-flow-title="${r}">${step.kind && step.kind !== 'background' ? `<tspan class="rw-tag rw-${step.kind}">${step.kind === 'write' ? 'WRITE PATH' : 'READ PATH'}</tspan><tspan dx="8">` : '<tspan>'}${r + 1}. ${esc(step.title)}</tspan></text>
+        <text class="path-row-title" x="${left - 12}" y="${y0 + 12}" data-flow-title="${r}">${step.kind ? `<tspan class="rw-tag rw-${step.kind === 'background' ? 'bg' : step.kind}">${step.kind === 'write' ? 'WRITE PATH' : step.kind === 'read' ? 'READ PATH' : 'BEHIND THE SCENES'}</tspan><tspan dx="8">` : '<tspan>'}${r + 1}. ${esc(step.title)}</tspan></text>
         ${edgesSvg}${nodesSvg}<g class="edge-labels">${labelsSvg}</g>
       </g>`;
     });
@@ -570,6 +570,10 @@ const DesignGraph = (() => {
     const boxes = [...svg.querySelectorAll('[data-box]')].map((n) => {
       const [x, y, w, h] = n.dataset.box.split(',').map(Number);
       return { x: x - 4, y: y - 4, w: w + 8, h: h + 8 };
+    });
+    svg.querySelectorAll('.arch-layer, .path-row-title').forEach((t) => {
+      const b = t.getBBox();
+      if (b.width) boxes.push({ x: b.x - 4, y: b.y - 3, w: b.width + 8, h: b.height + 6 });
     });
     const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
     const placed = [];
@@ -1062,11 +1066,17 @@ const DesignGraph = (() => {
         <div><b>${graph.nodes.length}</b><span>components</span></div>
         <div><b>${graph.flow.length}</b><span>user actions</span></div>
       </div>
-      ${['write', 'read'].map((k) => {
+      ${['write', 'read', 'background'].map((k) => {
         const items = graph.flow.map((f, i) => ({ f, i })).filter(({ f }) => f.kind === k);
-        return items.length ? `<div class="arch-section-h"><span class="rw-pill rw-${k}">${k === 'write' ? 'WRITE PATH' : 'READ PATH'}</span></div>
+        const head = k === 'background' ? '<span class="rw-pill rw-bg">BEHIND THE SCENES</span>' : `<span class="rw-pill rw-${k}">${k === 'write' ? 'WRITE PATH' : 'READ PATH'}</span>`;
+        return items.length ? `<div class="arch-section-h">${head}</div>
           <div class="arch-tags">${items.map(({ f, i }) => `<button class="arch-tag" data-go="flow:${i}">${esc(f.title)}</button>`).join('')}</div>` : '';
       }).join('')}
+      ${graph.basedOn ? `<div class="arch-based">
+        <div class="arch-section-h">Based on</div>
+        <p>${esc(graph.basedOn)}</p>
+        ${graph.sources.length ? `<ul>${graph.sources.map(([label, url]) => `<li><a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a></li>`).join('')}</ul>` : ''}
+      </div>` : ''}
       <ol class="read-steps">
         <li><b>Columns are layers.</b> Requests enter on the left (client) and go deeper to the right (services, queues, data).</li>
         <li><b>Arrows are connections.</b> Solid blue = the caller waits (sync). Dashed amber = handed off to a queue (async). Mint = the answer going back to the user.</li>
