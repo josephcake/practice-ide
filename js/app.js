@@ -25,6 +25,7 @@ const KEYS = {
   last: 'gs.last',
   lastCoding: 'gs.last.coding',
   lastDesign: 'gs.last.design',
+  lastAws: 'gs.last.aws',
   page: 'gs.page',
   queue: 'gs.queue',
   run: (id) => 'gs.run.' + id,
@@ -421,6 +422,14 @@ function updateProgress() {
   const val = $('#prog-val');
   const bar = $('#prog-bar');
   if (!val || !bar) return;
+  if (state.page === 'aws' && typeof AwsGuide !== 'undefined') {
+    const all = AwsGuide.all();
+    const done = all.filter((l) => state.done.has(l.id)).length;
+    if (label) label.textContent = 'AWS lessons done';
+    val.textContent = `${done}/${all.length}`;
+    bar.style.width = all.length ? Math.round((done / all.length) * 100) + '%' : '0%';
+    return;
+  }
   if (state.page === 'design') {
     const all = designQuestions();
     const done = all.filter((q) => state.done.has(q.id)).length;
@@ -439,6 +448,7 @@ function setPageChrome(page) {
   state.page = page;
   store.set(KEYS.page, page);
   document.body.classList.toggle('mode-design', page === 'design');
+  document.body.classList.toggle('mode-aws', page === 'aws');
   document.querySelectorAll('#page-nav [data-page]').forEach((btn) => {
     const on = btn.dataset.page === page;
     btn.classList.toggle('on', on);
@@ -448,9 +458,14 @@ function setPageChrome(page) {
   renderSidebar();
   renderQueue();
   renderDesignSidebar();
+  if (typeof AwsGuide !== 'undefined') AwsGuide.renderSidebar();
 }
 
 function switchPage(page) {
+  if (page === 'aws') {
+    if (state.page !== 'aws') openAws(store.get(KEYS.lastAws, null));
+    return;
+  }
   const pool = page === 'design' ? designQuestions() : ALL_CODING;
   if (!pool.length) return;
   if (state.page === page && state.active && pool.includes(state.active)) return;
@@ -724,6 +739,36 @@ function openDesignStage(item) {
   openBrief(false);
 }
 
+/* ------------------------------------------------------------
+   AWS page: lessons with a canvas; separate from the question flow
+   ------------------------------------------------------------ */
+function setAwsMode(on) {
+  const stage = $('#aws-stage');
+  if (stage) stage.setAttribute('aria-hidden', on ? 'false' : 'true');
+  if (!on && typeof AwsGuide !== 'undefined') AwsGuide.close();
+}
+
+function openAws(id) {
+  if (typeof AwsGuide === 'undefined') return;
+  const lesson = AwsGuide.get(id) || AwsGuide.get(store.get(KEYS.lastAws, null)) || AwsGuide.all()[0];
+  if (!lesson) return;
+  setDesignMode(false);
+  if (typeof DesignStudy !== 'undefined') DesignStudy.close();
+  setPageChrome('aws');
+  setAwsMode(true);
+  store.set(KEYS.lastAws, lesson.id);
+  document.title = lesson.title + ' - AWS - Interview Prep';
+  $('#q-title').textContent = lesson.title;
+  $('#q-sig').textContent = lesson.question;
+  $('#q-sig').style.display = '';
+  $('#results').classList.add('hidden');
+  setStatus('');
+  $('#btn-done').textContent = state.done.has(lesson.id) ? 'Done ✓' : 'Mark done';
+  $('#btn-done').classList.toggle('primary', !state.done.has(lesson.id));
+  AwsGuide.open(lesson.id);
+  if (typeof AIChat !== 'undefined') AIChat.refresh();
+}
+
 function bindDesignChrome() {
   const nav = $('#page-nav');
   if (nav) {
@@ -795,6 +840,7 @@ function chatSuggestions(item, isDesign, focus) {
 }
 
 function chatContextProvider() {
+  if (state.page === 'aws' && typeof AwsGuide !== 'undefined') return AwsGuide.chatContext();
   const item = state.active;
   if (!item) return null;
   const isDesign = !ALL_CODING.includes(item);
@@ -844,7 +890,7 @@ function openHelp() {
   $('#plan-title').textContent = 'How this app works';
   $('#plan-body').innerHTML = `
     <div class="help-grid">
-      <div class="help-card"><b>1 · Pick a page</b><p><b>Algorithm</b> is a coding IDE with tests. <b>System Design</b> is where you design systems and study architectures.</p></div>
+      <div class="help-card"><b>1 · Pick a page</b><p><b>Algorithm</b> is a coding IDE with tests. <b>System Design</b> is where you design systems and study architectures. <b>AWS</b> teaches the popular AWS services and the ones essential to AI, each on a live architecture canvas with "use this, not that" examples.</p></div>
       <div class="help-card"><b>2 · Read what is asked</b><p>Every design question opens with a plain-language task and concrete examples, so you know exactly what to build.</p></div>
       <div class="help-card"><b>3 · Write your design</b><p>Type your answer in <b>Your design</b> on the right, one step at a time: requirements, estimates, boxes and arrows, deep dive, failures. It saves automatically.</p></div>
       <div class="help-card"><b>4 · Get evaluated</b><p>Press <b>Evaluate my design</b>. The AI scores each area, lists gaps, and gives the follow-ups an interviewer would ask.</p></div>
@@ -861,7 +907,7 @@ function openHelp() {
       <tr><td>E</td><td>Expand the canvas</td></tr>
       <tr><td>⌘↵</td><td>Run tests (coding page)</td></tr>
       <tr><td>⌘H</td><td>AI hint (coding page)</td></tr>
-      <tr><td>j / k</td><td>Next / previous coding question</td></tr>
+      <tr><td>j / k</td><td>Next / previous coding question or AWS lesson</td></tr>
     </table>`;
   $('#plan-modal').classList.add('on');
 }
@@ -869,6 +915,7 @@ function openHelp() {
 function open(id) {
   const item = byId(id);
   if (!item) return;
+  setAwsMode(false);
   state.active = item;
   state.showSolution = false;
   state.tab = 'prompt';
@@ -2114,7 +2161,9 @@ function fmt(v) {
 }
 
 function toggleDone() {
-  const id = state.active.id;
+  const awsLesson = state.page === 'aws' && typeof AwsGuide !== 'undefined' ? AwsGuide.current() : null;
+  if (!awsLesson && !state.active) return;
+  const id = awsLesson ? awsLesson.id : state.active.id;
   const marking = !state.done.has(id);
   if (marking) state.done.add(id);
   else state.done.delete(id);
@@ -2125,8 +2174,9 @@ function toggleDone() {
   renderQueue();
   updateProgress();
   renderDesignSidebar();
+  if (typeof AwsGuide !== 'undefined') AwsGuide.renderSidebar();
   toast(state.done.has(id) ? 'Marked done' : 'Unmarked');
-  if (marking) {
+  if (marking && !awsLesson) {
     const inline = $('#btn-complete');
     if (inline) inline.remove();
     setTimeout(maybeReviewAfterPass, 0);
@@ -2140,6 +2190,20 @@ $('#btn-run').addEventListener('click', runTests);
 $('#btn-done').addEventListener('click', toggleDone);
 /** Starts the current problem over: every saved artifact for this question is cleared. */
 function resetProblem() {
+  const lesson = state.page === 'aws' && typeof AwsGuide !== 'undefined' ? AwsGuide.current() : null;
+  if (lesson) {
+    if (!confirm(`Reset “${lesson.title}”?\n\nThis clears your quiz answers, the Ask AI conversation, and the done mark for this lesson only.`)) return;
+    AwsGuide.reset(lesson.id);
+    if (typeof AIChat !== 'undefined') AIChat.forget('aws:' + lesson.id);
+    if (state.done.has(lesson.id)) {
+      state.done.delete(lesson.id);
+      store.set(KEYS.done, [...state.done]);
+    }
+    openAws(lesson.id);
+    updateProgress();
+    toast('Lesson reset');
+    return;
+  }
   const item = state.active;
   if (!item) return;
   const id = item.id;
@@ -2607,10 +2671,18 @@ document.addEventListener('keydown', (e) => {
   if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === '/') { e.preventDefault(); AIChat.open(); return; }
   if (e.key === '?') { openPlan(); return; }
-  if (document.body.classList.contains('mode-design') && typeof DesignGraph !== 'undefined' && DesignGraph.getGraph()
-      && DesignGraph.isInline() && DesignStudy.isMapShown()) {
+  const onAws = document.body.classList.contains('mode-aws');
+  if (typeof DesignGraph !== 'undefined' && DesignGraph.getGraph() && DesignGraph.isInline()
+      && (onAws || (document.body.classList.contains('mode-design') && DesignStudy.isMapShown()))) {
     if (e.key === 'p' || e.key === 'P') { DesignGraph.setLayout(DesignGraph.layout() === 'paths' ? 'layers' : 'paths'); return; }
     if (e.key === 'e' || e.key === 'E') { DesignGraph.setExpanded(); return; }
+  }
+  if (onAws && typeof AwsGuide !== 'undefined') {
+    const lessons = AwsGuide.all();
+    const at = lessons.indexOf(AwsGuide.current());
+    if (e.key === 'j' && at < lessons.length - 1) openAws(lessons[at + 1].id);
+    if (e.key === 'k' && at > 0) openAws(lessons[at - 1].id);
+    return;
   }
   const idx = ALL_CODING.findIndex((q) => state.active && q.id === state.active.id);
   if (e.key === 'j' && idx >= 0) open(ALL_CODING[Math.min(idx + 1, ALL_CODING.length - 1)].id);
@@ -2625,6 +2697,7 @@ function boot() {
   AIChat.setContextProvider(chatContextProvider);
   AIChat.init();
   DesignGraph.onChange(() => AIChat.refresh());
+  if (typeof AwsGuide !== 'undefined') AwsGuide.bind({ isDone: (id) => state.done.has(id), onOpen: openAws });
   const help = $('#btn-help');
   if (help) help.addEventListener('click', openHelp);
   if (!store.get('gs.help.seen', false)) {
@@ -2638,6 +2711,10 @@ function boot() {
   store.set(KEYS.queue, state.queue);
   renderSidebar();
   renderQueue();
+  if (store.get(KEYS.page, 'coding') === 'aws' && typeof AwsGuide !== 'undefined') {
+    openAws(store.get(KEYS.lastAws, null));
+    return;
+  }
   const last = store.get(KEYS.last, GS[0] ? GS[0].id : QUESTIONS[0].id);
   open(byId(last) ? last : (GS[0] ? GS[0].id : QUESTIONS[0].id));
 }

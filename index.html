@@ -11,11 +11,12 @@
   <button class="btn ghost icon-btn" id="btn-sidebar" title="Show / hide the question list" aria-label="Toggle question list">☰</button>
   <div class="global-brand">
     <span class="global-title">Senior SWE Interview Prep</span>
-    <span class="global-sub">Coding + System Design</span>
+    <span class="global-sub">Coding · System Design · AWS</span>
   </div>
   <div class="page-nav" id="page-nav" role="tablist" aria-label="Practice mode">
     <button data-page="coding" class="on" role="tab" aria-selected="true">Algorithm</button>
     <button data-page="design" role="tab" aria-selected="false">System Design</button>
+    <button data-page="aws" role="tab" aria-selected="false" title="Learn the most popular AWS services and the ones essential to AI">AWS</button>
   </div>
   <div class="spacer"></div>
   <button class="btn ghost" id="btn-help" title="How this app works">How it works</button>
@@ -93,6 +94,20 @@
         <input id="design-search" class="search" placeholder="Search system design" />
       </div>
       <nav class="list" id="design-list"></nav>
+    </div>
+
+    <!-- AWS page list -->
+    <div class="side-aws" id="side-aws">
+      <div class="queue-head design-head">
+        <span class="queue-title">AWS lessons</span>
+        <span class="queue-count" id="aws-count">0</span>
+        <div class="spacer"></div>
+        <button class="btn tiny ghost" id="btn-aws-next" title="Next lesson not marked done">Next ▸</button>
+      </div>
+      <div class="side-tools design-tools">
+        <input id="aws-search" class="search" placeholder="Search: Lambda, RAG, queue, vector…" />
+      </div>
+      <nav class="list" id="aws-list"></nav>
     </div>
   </aside>
 
@@ -200,6 +215,21 @@
         <div class="study-body" id="study-body"></div>
       </aside>
     </section>
+
+    <!-- ---------------- AWS page: canvas + guide panel ---------------- -->
+    <section class="aws-stage" id="aws-stage" aria-hidden="true">
+      <div class="aws-canvas" id="aws-canvas"></div>
+      <div class="resizer v" id="resize-aws" role="separator" aria-orientation="vertical" aria-label="Resize the guide panel" title="Drag to resize · double-click to reset"></div>
+      <button class="study-reopen" id="aws-reopen" title="Show the guide panel" type="button">Show guide ◂</button>
+      <aside class="study-pane aws-pane" id="aws-pane" aria-label="AWS guide">
+        <div class="study-top">
+          <div class="study-tabs" id="aws-tabs" role="tablist"></div>
+          <button class="btn tiny ghost icon-btn" id="aws-collapse" title="Hide this panel" type="button">✕</button>
+        </div>
+        <div class="study-inspect" id="aws-inspect" hidden></div>
+        <div class="study-body aws-body" id="aws-body"></div>
+      </aside>
+    </section>
   </main>
 
   <div class="resizer v" id="resize-chat" role="separator" aria-orientation="vertical" aria-label="Resize AI chat" title="Drag to resize · double-click to reset"></div>
@@ -272,22 +302,30 @@
       <div class="arch-canvas" id="arch-canvas">
         <svg id="arch-svg" role="img" aria-label="Interactive system architecture" xmlns:xlink="http://www.w3.org/1999/xlink"></svg>
         <div class="arch-toolbar" role="toolbar" aria-label="Canvas controls">
-          <div class="tb-group" id="arch-layout" role="group" aria-label="View">
-            <button data-layout="layers" title="Every component, arranged by layer" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2" width="4" height="12" rx="1"/><rect x="6" y="2" width="4" height="12" rx="1"/><rect x="10.5" y="2" width="4" height="12" rx="1"/></svg>Components</button>
-            <button data-layout="paths" title="Each thing a user does, as its own row with every hop numbered" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="4" r="1.6"/><path d="M5 4h8"/><circle cx="3" cy="12" r="1.6"/><path d="M5 12h8"/><path d="M11 2l2 2-2 2M11 10l2 2-2 2"/></svg>User actions</button>
-          </div>
-          <div class="tb-group" id="arch-route" role="group" aria-label="Line style">
-            <button data-route="curved" title="Curved connections" type="button" aria-label="Curved lines"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13C6 13 6 3 14 3"/></svg>Curved</button>
-            <button data-route="ortho" title="Straight lines with 90° turns only" type="button" aria-label="Right-angle lines"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13h6V3h6"/></svg>Right-angle</button>
+          <div class="tb-menu" id="arch-menu">
+            <button class="tb-gear" id="arch-menu-btn" type="button" aria-label="Canvas settings" aria-expanded="false" aria-controls="arch-menu-panel" title="Canvas settings">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.1"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M12.8 3.2l-1.4 1.4M4.6 11.4l-1.4 1.4"/></svg>
+            </button>
+            <div class="tb-menu-panel" id="arch-menu-panel">
+              <div class="tb-group" id="arch-layout" role="group" aria-label="View">
+                <button data-layout="layers" title="Every component, arranged by layer" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2" width="4" height="12" rx="1"/><rect x="6" y="2" width="4" height="12" rx="1"/><rect x="10.5" y="2" width="4" height="12" rx="1"/></svg>Components</button>
+                <button data-layout="paths" title="Each thing a user does, as its own row with every hop numbered" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="4" r="1.6"/><path d="M5 4h8"/><circle cx="3" cy="12" r="1.6"/><path d="M5 12h8"/><path d="M11 2l2 2-2 2M11 10l2 2-2 2"/></svg>User actions</button>
+              </div>
+              <div class="tb-group" id="arch-route" role="group" aria-label="Line style">
+                <button data-route="curved" title="Curved connections" type="button" aria-label="Curved lines"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13C6 13 6 3 14 3"/></svg>Curved</button>
+                <button data-route="ortho" title="Straight lines with 90° turns only" type="button" aria-label="Right-angle lines"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13h6V3h6"/></svg>Right-angle</button>
+              </div>
+              <div class="tb-group" id="arch-viewsize" role="group" aria-label="View size">
+                <button id="arch-reset" title="Fit the whole map in view" type="button">Fit</button>
+                <button id="arch-expand" class="tb-icon" title="Expand canvas to full screen (E · Esc to exit)" type="button" aria-label="Expand canvas"><span aria-hidden="true">⤢</span><span class="tb-expand-label">Full screen</span></button>
+                <button id="arch-legend-btn" type="button" aria-pressed="false" title="Show or hide the legend">Legend</button>
+              </div>
+            </div>
           </div>
           <div class="tb-group zoom" role="group" aria-label="Zoom">
             <button id="arch-zoom-out" title="Zoom out" type="button" aria-label="Zoom out">−</button>
             <span class="arch-zoom-label" id="arch-zoom">100%</span>
             <button id="arch-zoom-in" title="Zoom in" type="button" aria-label="Zoom in">+</button>
-          </div>
-          <div class="tb-group" role="group" aria-label="View size">
-            <button id="arch-reset" title="Fit the whole map in view" type="button">Fit</button>
-            <button id="arch-expand" class="tb-icon" title="Expand canvas to full screen (E · Esc to exit)" type="button" aria-label="Expand canvas">⤢</button>
           </div>
         </div>
         <div class="arch-legend" id="arch-legend"></div>
@@ -323,6 +361,10 @@
 <script src="js/ai-chat.js"></script>
 <script src="js/design-practice.js"></script>
 <script src="js/design-study.js"></script>
+<script src="js/aws-services.js"></script>
+<script src="js/aws-lessons-1.js"></script>
+<script src="js/aws-lessons-2.js"></script>
+<script src="js/aws-guide.js"></script>
 <script src="js/runner.js"></script>
 <script src="js/app.js"></script>
 <script>

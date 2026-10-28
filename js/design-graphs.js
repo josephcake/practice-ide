@@ -14,7 +14,9 @@ const DesignGraph = (() => {
   const COLORS = {
     Client: '#7ab8ff', Edge: '#b89cff', Gateway: '#e39bf0', Service: '#2dd4bf', Async: '#f2c75e',
     Data: '#f5a65b', Obs: '#9aa8bd', Feed: '#7ab8ff', Ingest: '#d99bff',
-    Consumers: '#7ab8ff', Provider: '#d99bff', Event: '#2dd4bf'
+    Consumers: '#7ab8ff', Provider: '#d99bff', Event: '#2dd4bf',
+    Compute: '#2dd4bf', Workers: '#2dd4bf', Tools: '#2dd4bf', Events: '#f2c75e', Queues: '#f2c75e',
+    AI: '#ff7aa8', Security: '#9ee35d', Analytics: '#d99bff', Storage: '#f5a65b', Network: '#b89cff', Deploy: '#a9b6cb'
   };
   const NH = 62, TOP = 96, LEFT = 40;
 
@@ -79,6 +81,48 @@ const DesignGraph = (() => {
     });
     const expandBtn = byId('arch-expand');
     if (expandBtn) expandBtn.addEventListener('click', () => setExpanded());
+    const menu = byId('arch-menu');
+    const menuBtn = byId('arch-menu-btn');
+    const canvasEl = byId('arch-canvas');
+    const legendBtn = byId('arch-legend-btn');
+    const closeMenu = () => {
+      if (!menu) return;
+      menu.classList.remove('open');
+      if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
+    };
+    const placeMenu = () => {
+      if (!menuPanel || !menuBtn) return;
+      const r = menuBtn.getBoundingClientRect();
+      const margin = 8;
+      const below = window.innerHeight - r.bottom - margin - 12;
+      menuPanel.style.top = Math.round(r.bottom + margin) + 'px';
+      menuPanel.style.right = Math.max(margin, Math.round(window.innerWidth - r.right)) + 'px';
+      menuPanel.style.left = 'auto';
+      menuPanel.style.maxHeight = Math.max(180, Math.min(440, below)) + 'px';
+    };
+    if (menuBtn && menu) {
+      menuBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const open = !menu.classList.contains('open');
+        if (open) placeMenu();
+        menu.classList.toggle('open', open);
+        menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+    }
+    const menuPanel = byId('arch-menu-panel');
+    if (menuPanel) menuPanel.addEventListener('click', (event) => {
+      if (event.target.closest('button')) closeMenu();
+    });
+    document.addEventListener('click', (event) => {
+      if (menu && !menu.contains(event.target)) closeMenu();
+    });
+    if (legendBtn && canvasEl) {
+      legendBtn.addEventListener('click', () => {
+        const on = canvasEl.classList.toggle('legend-on');
+        legendBtn.classList.toggle('on', on);
+        legendBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
 
     document.querySelectorAll('#arch-modal [data-atab]').forEach((btn) => {
       btn.addEventListener('click', () => setTab(btn.dataset.atab));
@@ -154,6 +198,14 @@ const DesignGraph = (() => {
 
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
+      const openMenu = byId('arch-menu');
+      if (openMenu && openMenu.classList.contains('open')) {
+        event.stopImmediatePropagation();
+        openMenu.classList.remove('open');
+        const b = byId('arch-menu-btn');
+        if (b) b.setAttribute('aria-expanded', 'false');
+        return;
+      }
       if (modal.classList.contains('expanded')) { event.stopImmediatePropagation(); setExpanded(false); return; }
       if (modal.classList.contains('on')) close();
     });
@@ -181,13 +233,14 @@ const DesignGraph = (() => {
 
     byId('arch-title').textContent = graph.title;
     byId('arch-sub').textContent = graph.subtitle;
+    // visible before rendering: label placement measures text with getBBox, which is 0×0 while hidden
+    modal.classList.toggle('inline', inline);
+    modal.classList.toggle('on', !inline);
     buildLegend();
     render();
     resetView(true);
     setTab('inspect');
     showInspector(false);
-    modal.classList.toggle('inline', inline);
-    modal.classList.toggle('on', !inline);
     document.body.classList.toggle('modal-open', !inline);
     if (!inline) byId('arch-close').focus();
     emit();
@@ -229,7 +282,7 @@ const DesignGraph = (() => {
     const graph = state.g;
     const count = graph.layers.length;
     const nw = 188;
-    const colw = count >= 7 ? 216 : 224;
+    const colw = graph.colw || (count >= 7 ? 216 : 224);
     const labelMax = Math.max(13, Math.floor((nw - 20) / 7.2));
     const subMax = Math.max(14, Math.floor((nw - 18) / 6.3));
     const columns = graph.layers.map((layer) => graph.nodes.filter((node) => node.layer === layer));
@@ -321,8 +374,6 @@ const DesignGraph = (() => {
       return pos ? nodeShape(node, pos.x, pos.y, nw, nh, labelMax, subMax) : '';
     }).join('');
 
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    svg.setAttribute('preserveAspectRatio', 'xMidYMin meet');
     svg.innerHTML = defs + layers + edgeMarkup + nodeMarkup + `<g class="edge-labels">${labelMarkup.join('')}</g>`;
     clearHighlights();
   }
@@ -330,6 +381,7 @@ const DesignGraph = (() => {
   const SHAPE_BADGE = { client: 'USER', edge: 'EDGE', service: 'SERVICE', queue: 'QUEUE', db: 'DATABASE', cache: 'CACHE', external: 'EXTERNAL', obs: 'MONITOR' };
 
   function shapeOf(node) {
+    if (node.shape) return node.shape;
     return typeof ConceptLib !== 'undefined' ? ConceptLib.shapeFor(node) : 'service';
   }
 
@@ -372,6 +424,7 @@ const DesignGraph = (() => {
 
   /** The type tag above each name: specific for edge components, the shape family otherwise. */
   function badgeFor(node, shape) {
+    if (node.badge) return node.badge;
     const c = typeof ConceptLib !== 'undefined' ? ConceptLib.forNode(node) : null;
     if (c && c.id === 'lb') return 'LOAD BALANCER';
     if (c && c.id === 'cdn') return 'CDN';
@@ -382,7 +435,7 @@ const DesignGraph = (() => {
   }
 
   function nodeShape(node, x, y, nw, nh, labelMax, subMax) {
-    const color = colorFor(node.layer);
+    const color = node.color || colorFor(node.layer);
     const shape = shapeOf(node);
     const cyl = shape === 'db' || shape === 'cache';
     const pad = shape === 'edge' ? 14 : shape === 'client' ? 14 : 10;
@@ -470,11 +523,24 @@ const DesignGraph = (() => {
     if (!state.g) return;
     state.route = route === 'ortho' ? 'ortho' : 'curved';
     try { localStorage.setItem('gs.arch.route', JSON.stringify(state.route)); } catch (e) { /* ignore */ }
+    if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+    state.view.x = state.target.x;
+    state.view.y = state.target.y;
+    state.view.w = state.target.w;
+    state.view.h = state.target.h;
+    const kept = { x: state.view.x, y: state.view.y, w: state.view.w, h: state.view.h };
     const flow = state.flow, sel = state.selected, edge = state.selectedEdge;
-    render();
+    render({ preserveView: true });
     if (flow >= 0) startFlowAt(flow);
     else if (sel) selectNode(sel);
     else if (edge != null) selectEdge(edge);
+    const restore = () => {
+      state.view.x = kept.x; state.view.y = kept.y; state.view.w = kept.w; state.view.h = kept.h;
+      state.target.x = kept.x; state.target.y = kept.y; state.target.w = kept.w; state.target.h = kept.h;
+      applyView();
+    };
+    restore();
+    requestAnimationFrame(restore);
   }
 
   function isReturnEdge(edge) {
@@ -556,8 +622,6 @@ const DesignGraph = (() => {
       </g>`;
     });
 
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    svg.setAttribute('preserveAspectRatio', 'xMidYMin meet');
     svg.innerHTML = svgDefs() + `<text class="arch-layer" x="${left - 12}" y="30" fill="#8fa3bf">USER ACTIONS, HOP BY HOP · numbers show the order · arcs below the row are responses · click a title to highlight it</text>` + body;
     clearHighlights();
   }
@@ -607,10 +671,13 @@ const DesignGraph = (() => {
     });
   }
 
-  function render() {
+  function render(options) {
+    const preserve = !!(options && options.preserveView);
     if (state.layout === 'paths') renderPathView();
     else renderSVG();
     svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    if (preserve) applyView();
+    else svg.setAttribute('viewBox', `0 0 ${state.W} ${state.H}`);
     declutterLabels();
     bindPulses();
     const seg = byId('arch-layout');
@@ -761,6 +828,7 @@ const DesignGraph = (() => {
   function showInspector(open) {
     if (!state.inline || !modal) return;
     if (open && typeof DesignStudy !== 'undefined') DesignStudy.notifyInspect();
+    if (open && typeof AwsGuide !== 'undefined') AwsGuide.notifyInspect();
     modal.classList.toggle('inspector-open', open);
     const side = modal.querySelector('.arch-side');
     if (side) side.toggleAttribute('inert', !open);
@@ -1029,7 +1097,8 @@ const DesignGraph = (() => {
     if (state.selected != null) {
       const node = nodeMap.get(state.selected);
       if (!node) return;
-      const color = colorFor(node.layer);
+      const color = node.color || colorFor(node.layer);
+      const awsCard = node.svc && typeof AwsGuide !== 'undefined' ? AwsGuide.serviceCard(node.svc) : '';
       const all = edgesByNode.get(node.id) || [];
       const out = all.filter((i) => graph.edges[i].from === node.id);
       const inc = all.filter((i) => graph.edges[i].to === node.id);
@@ -1039,22 +1108,24 @@ const DesignGraph = (() => {
         return `<li data-go="edge:${i}"><span class="conn-dir">${dir === 'out' ? '→' : '←'}</span><b>${esc(nodeLabel(other))}</b><span class="hop-kind">${esc(e.kind)} · ${esc(e.label)}</span></li>`;
       };
       const flows = graph.flow.map((f, i) => (f.nodes.includes(node.id) ? i : -1)).filter((i) => i >= 0);
-      const concept = typeof ConceptLib !== 'undefined' ? ConceptLib.forNode(node) : null;
+      const concept = !awsCard && typeof ConceptLib !== 'undefined' ? ConceptLib.forNode(node) : null;
       const shape = shapeOf(node);
-      panel.innerHTML = `<div class="arch-panel-kicker" style="color:${color}">${esc(SHAPE_BADGE[shape] || '')} · ${esc(node.layer.toUpperCase())} LAYER</div>
+      panel.innerHTML = `<div class="arch-panel-kicker" style="color:${color}">${esc(node.badge || SHAPE_BADGE[shape] || '')} · ${esc(node.layer.toUpperCase())} LAYER</div>
         <h4>${esc(node.label)}</h4>
         <p class="arch-panel-sub">${esc(node.sub)}</p>
         <div class="arch-section-h">In this design</div>
         <p class="arch-panel-body">${link(node.detail)}</p>
         ${listHTML(node.spec)}
-        ${riskHTML(node, false)}
+        ${awsCard ? `<div class="arch-section-h">The service</div>${awsCard}` : riskHTML(node, false)}
         ${concept ? conceptCard(concept) : ''}
         ${out.length ? `<div class="arch-section-h">Sends to</div><ul class="conn-list">${out.map((i) => connRow(i, 'out')).join('')}</ul>` : ''}
         ${inc.length ? `<div class="arch-section-h">Receives from</div><ul class="conn-list">${inc.map((i) => connRow(i, 'in')).join('')}</ul>` : ''}
         ${flows.length ? `<div class="arch-section-h">Used in user actions</div><div class="arch-tags">${flows.map((i) => `<button class="arch-tag" data-go="flow:${i}">${i + 1}. ${esc(graph.flow[i].title)}</button>`).join('')}</div>` : ''}
         <div class="ask-row">
-          ${askBtn('Why is this here?', `In ${graph.title}, what problem does the ${node.label} (${node.sub}) solve, and what would go wrong without it?`)}
-          ${askBtn('Alternatives?', `What are the alternatives to the ${node.label} (${node.sub}) in ${graph.title}, and when would I pick each one?`)}
+          ${graph.aws ? askBtn('Why this service here?', `In the AWS architecture "${graph.title}", why is ${node.label} the right choice for "${node.sub}"? What would I use instead, and in which situation?`)
+            : askBtn('Why is this here?', `In ${graph.title}, what problem does the ${node.label} (${node.sub}) solve, and what would go wrong without it?`)}
+          ${graph.aws ? askBtn('When not to use it?', `When should I NOT use ${node.label} on AWS? Give 3 concrete situations and the AWS service I should pick instead for each.`)
+            : askBtn('Alternatives?', `What are the alternatives to the ${node.label} (${node.sub}) in ${graph.title}, and when would I pick each one?`)}
         </div>`;
       return;
     }
@@ -1081,7 +1152,9 @@ const DesignGraph = (() => {
         <li><b>Columns are layers.</b> Requests enter on the left (client) and go deeper to the right (services, queues, data).</li>
         <li><b>Arrows are connections.</b> Solid blue = the caller waits (sync). Dashed amber = handed off to a queue (async). Mint = the answer going back to the user.</li>
         <li><b>Switch to User actions</b> to see each thing a user does as its own row, hop by hop. Click a row title to highlight it.</li>
-        <li><b>Click any box</b> to see what it does, what goes wrong without it, and what happens if it breaks.</li>
+        ${graph.aws
+          ? '<li><b>Box colors are AWS categories</b> (compute, storage, database, AI…). <b>Click any box</b> to see what the service is, when to use it, what to pick instead, and how you pay.</li>'
+          : '<li><b>Click any box</b> to see what it does, what goes wrong without it, and what happens if it breaks.</li>'}
       </ol>
       <div class="arch-hint">Scroll to zoom · drag to pan · click empty canvas to clear.</div>`;
   }
