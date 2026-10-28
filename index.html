@@ -14,8 +14,8 @@
     <span class="global-sub">Coding · System Design · AWS</span>
   </div>
   <div class="page-nav" id="page-nav" role="tablist" aria-label="Practice mode">
-    <button data-page="coding" class="on" role="tab" aria-selected="true">Algorithm</button>
-    <button data-page="design" role="tab" aria-selected="false">System Design</button>
+    <button data-page="coding" class="on" role="tab" aria-selected="true" aria-label="Algorithm"><span class="nav-long">Algorithm</span><span class="nav-short" aria-hidden="true">Algo</span></button>
+    <button data-page="design" role="tab" aria-selected="false" aria-label="System Design"><span class="nav-long">System Design</span><span class="nav-short" aria-hidden="true">Design</span></button>
     <button data-page="aws" role="tab" aria-selected="false" title="Learn the most popular AWS services and the ones essential to AI">AWS</button>
   </div>
   <div class="spacer"></div>
@@ -132,6 +132,7 @@
           <button id="btn-rounds" role="menuitem">Interview rounds</button>
           <button id="btn-plan" role="menuitem">5-day study plan <kbd>?</kbd></button>
           <button id="btn-graph" role="menuitem">Code graph</button>
+          <button id="btn-reset-more" class="more-phone" role="menuitem">Reset this problem</button>
         </div>
       </div>
       <button class="btn ghost" id="btn-notes">Notes</button>
@@ -206,6 +207,7 @@
       </aside>
       <button class="study-reopen" id="study-reopen" title="Show the side panel" type="button">Show panel ◂</button>
       <aside class="study-pane" id="study-pane" aria-label="Your design and study guide">
+        <button class="sheet-grab" type="button" aria-label="Resize the panel: tap to expand or shrink, or drag"><i></i></button>
         <div class="study-top">
           <div class="study-tabs" id="study-tabs" role="tablist"></div>
           <button class="btn tiny ghost icon-btn" id="study-collapse" title="Hide this panel" type="button">✕</button>
@@ -222,6 +224,7 @@
       <div class="resizer v" id="resize-aws" role="separator" aria-orientation="vertical" aria-label="Resize the guide panel" title="Drag to resize · double-click to reset"></div>
       <button class="study-reopen" id="aws-reopen" title="Show the guide panel" type="button">Show guide ◂</button>
       <aside class="study-pane aws-pane" id="aws-pane" aria-label="AWS guide">
+        <button class="sheet-grab" type="button" aria-label="Resize the panel: tap to expand or shrink, or drag"><i></i></button>
         <div class="study-top">
           <div class="study-tabs" id="aws-tabs" role="tablist"></div>
           <button class="btn tiny ghost icon-btn" id="aws-collapse" title="Hide this panel" type="button">✕</button>
@@ -301,32 +304,23 @@
     <div class="arch-main">
       <div class="arch-canvas" id="arch-canvas">
         <svg id="arch-svg" role="img" aria-label="Interactive system architecture" xmlns:xlink="http://www.w3.org/1999/xlink"></svg>
-        <div class="arch-toolbar" role="toolbar" aria-label="Canvas controls">
-          <div class="tb-menu" id="arch-menu">
-            <button class="tb-gear" id="arch-menu-btn" type="button" aria-label="Canvas settings" aria-expanded="false" aria-controls="arch-menu-panel" title="Canvas settings">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.1"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M12.8 3.2l-1.4 1.4M4.6 11.4l-1.4 1.4"/></svg>
-            </button>
-            <div class="tb-menu-panel" id="arch-menu-panel">
-              <div class="tb-group" id="arch-layout" role="group" aria-label="View">
-                <button data-layout="layers" title="Every component, arranged by layer" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2" width="4" height="12" rx="1"/><rect x="6" y="2" width="4" height="12" rx="1"/><rect x="10.5" y="2" width="4" height="12" rx="1"/></svg>Components</button>
-                <button data-layout="paths" title="Each thing a user does, as its own row with every hop numbered" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="4" r="1.6"/><path d="M5 4h8"/><circle cx="3" cy="12" r="1.6"/><path d="M5 12h8"/><path d="M11 2l2 2-2 2M11 10l2 2-2 2"/></svg>User actions</button>
-              </div>
-              <div class="tb-group" id="arch-route" role="group" aria-label="Line style">
-                <button data-route="curved" title="Curved connections" type="button" aria-label="Curved lines"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13C6 13 6 3 14 3"/></svg>Curved</button>
-                <button data-route="ortho" title="Straight lines with 90° turns only" type="button" aria-label="Right-angle lines"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13h6V3h6"/></svg>Right-angle</button>
-              </div>
-              <div class="tb-group" id="arch-viewsize" role="group" aria-label="View size">
-                <button id="arch-reset" title="Fit the whole map in view" type="button">Fit</button>
-                <button id="arch-expand" class="tb-icon" title="Expand canvas to full screen (E · Esc to exit)" type="button" aria-label="Expand canvas"><span aria-hidden="true">⤢</span><span class="tb-expand-label">Full screen</span></button>
-                <button id="arch-legend-btn" type="button" aria-pressed="false" title="Show or hide the legend">Legend</button>
-              </div>
-            </div>
+        <div class="arch-toolbar" id="arch-toolbar" role="toolbar" aria-label="Canvas controls">
+          <div class="tb-group tb-wide" id="arch-layout" role="group" aria-label="Show">
+            <button data-layout="layers" title="Every component, arranged by layer" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2" width="4" height="12" rx="1"/><rect x="6" y="2" width="4" height="12" rx="1"/><rect x="10.5" y="2" width="4" height="12" rx="1"/></svg>Components</button>
+            <button data-layout="paths" title="Each thing a user does, with every hop numbered" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="4" r="1.6"/><path d="M5 4h8"/><circle cx="3" cy="12" r="1.6"/><path d="M5 12h8"/><path d="M11 2l2 2-2 2M11 10l2 2-2 2"/></svg>User actions</button>
           </div>
           <div class="tb-group zoom" role="group" aria-label="Zoom">
             <button id="arch-zoom-out" title="Zoom out" type="button" aria-label="Zoom out">−</button>
             <span class="arch-zoom-label" id="arch-zoom">100%</span>
             <button id="arch-zoom-in" title="Zoom in" type="button" aria-label="Zoom in">+</button>
           </div>
+          <div class="tb-group tb-wide" role="group" aria-label="View size">
+            <button data-act="fit" id="arch-reset" title="Fit the map to the screen" type="button">Fit</button>
+            <button data-act="expand" id="arch-expand" class="tb-icon" title="Expand canvas to full screen (E · Esc to exit)" type="button" aria-label="Expand canvas"><span class="tb-expand-icon" aria-hidden="true">⤢</span></button>
+          </div>
+          <button class="tb-gear" id="arch-menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="arch-menu" aria-label="Canvas settings" title="Canvas settings: direction, lines, legend">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
         </div>
         <div class="arch-legend" id="arch-legend"></div>
       </div>
@@ -339,6 +333,52 @@
         </div>
         <div class="arch-panel" id="arch-panel"></div>
       </aside>
+    </div>
+  </div>
+</div>
+
+<!-- canvas settings: a drop-down under the gear, a bottom sheet on phones -->
+<div class="tb-scrim" id="arch-menu-scrim" hidden></div>
+<div class="tb-menu-panel" id="arch-menu" role="dialog" aria-label="Canvas settings" hidden>
+  <div class="tb-menu-head">
+    <b>Canvas settings</b>
+    <button class="tb-menu-close" data-act="close-menu" type="button" aria-label="Close settings">✕</button>
+  </div>
+  <div class="tb-sec tb-narrow">
+    <span class="tb-sec-h">Show</span>
+    <div class="tb-seg">
+      <button data-layout="layers" type="button">Components</button>
+      <button data-layout="paths" type="button">User actions</button>
+    </div>
+  </div>
+  <div class="tb-sec">
+    <span class="tb-sec-h">Direction</span>
+    <div class="tb-seg three">
+      <button data-dir="auto" type="button">Auto</button>
+      <button data-dir="lr" type="button">Left → right</button>
+      <button data-dir="td" type="button">Top → down</button>
+    </div>
+    <p class="tb-note" id="arch-dir-note"></p>
+  </div>
+  <div class="tb-sec">
+    <span class="tb-sec-h">Lines</span>
+    <div class="tb-seg">
+      <button data-route="curved" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13C6 13 6 3 14 3"/></svg>Curved</button>
+      <button data-route="ortho" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13h6V3h6"/></svg>Right-angle</button>
+    </div>
+  </div>
+  <div class="tb-sec">
+    <span class="tb-sec-h">Legend</span>
+    <div class="tb-seg">
+      <button data-legend="on" type="button">Show</button>
+      <button data-legend="off" type="button">Hide</button>
+    </div>
+  </div>
+  <div class="tb-sec tb-narrow">
+    <span class="tb-sec-h">View</span>
+    <div class="tb-seg">
+      <button data-act="fit" type="button">Fit to screen</button>
+      <button data-act="expand" type="button"><span class="tb-expand-label">Full screen</span></button>
     </div>
   </div>
 </div>
@@ -365,6 +405,7 @@
 <script src="js/aws-lessons-1.js"></script>
 <script src="js/aws-lessons-2.js"></script>
 <script src="js/aws-guide.js"></script>
+<script src="js/panel-sheet.js"></script>
 <script src="js/runner.js"></script>
 <script src="js/app.js"></script>
 <script>

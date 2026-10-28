@@ -2236,6 +2236,7 @@ function resetProblem() {
 }
 
 $('#btn-reset').addEventListener('click', resetProblem);
+$('#btn-reset-more').addEventListener('click', resetProblem);
 
 const moreMenu = $('#more-menu');
 if (moreMenu) {
@@ -2269,7 +2270,7 @@ if (sidebarBtn) sidebarBtn.addEventListener('click', () => {
   if (show && sidebarEl && getComputedStyle(sidebarEl).display === 'none') setSidebarDrawer(true);
 });
 if (sidebarEl) sidebarEl.addEventListener('click', (e) => {
-  if (document.body.classList.contains('sidebar-drawer') && e.target.closest('.item[data-id]')) setSidebarDrawer(false);
+  if (document.body.classList.contains('sidebar-drawer') && e.target.closest('.item[data-id], .item[data-svc-hit]')) setSidebarDrawer(false);
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.body.classList.contains('sidebar-drawer')) setSidebarDrawer(false);

@@ -26,8 +26,15 @@ const DesignGraph = (() => {
     flow: -1, timer: null, panning: false, last: null, inline: false,
     raf: null, smooth: 80,
     layout: (() => { try { return JSON.parse(localStorage.getItem('gs.arch.layout')) === 'paths' ? 'paths' : 'layers'; } catch (e) { return 'layers'; } })(),
-    route: (() => { try { return JSON.parse(localStorage.getItem('gs.arch.route')) === 'ortho' ? 'ortho' : 'curved'; } catch (e) { return 'curved'; } })()
+    route: (() => { try { return JSON.parse(localStorage.getItem('gs.arch.route')) === 'ortho' ? 'ortho' : 'curved'; } catch (e) { return 'curved'; } })(),
+    // 'auto' follows the device: top → down when the screen is portrait and phone/tablet sized
+    dir: (() => { try { const v = JSON.parse(localStorage.getItem('gs.arch.dir')); return v === 'lr' || v === 'td' ? v : 'auto'; } catch (e) { return 'auto'; } })(),
+    legend: (() => { try { const v = JSON.parse(localStorage.getItem('gs.arch.legend')); return v === 'on' || v === 'off' ? v : null; } catch (e) { return null; } })(),
+    flowDir: 'lr', perRow: 2, box: null, fitted: true,
+    pointers: new Map(), pinch: null, moved: false
   };
+  const PORTRAIT = typeof window.matchMedia === 'function' ? window.matchMedia('(orientation: portrait)') : null;
+  const save = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* ignore */ } };
 
   const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -38,7 +45,7 @@ const DesignGraph = (() => {
   };
   const colorFor = (layer) => COLORS[layer] || '#9aa8bd';
 
-  let modal, svg, panel, legend;
+  let modal, svg, panel, legend, menuEl, menuBtn, menuScrim;
   let nodeMap = new Map();
   let edgesByNode = new Map();
   const listeners = [];
@@ -64,64 +71,30 @@ const DesignGraph = (() => {
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
     byId('arch-zoom-in').addEventListener('click', () => zoomCenter(0.82));
     byId('arch-zoom-out').addEventListener('click', () => zoomCenter(1.22));
-    byId('arch-reset').addEventListener('click', () => resetView());
     const inspBtn = byId('arch-inspector');
     if (inspBtn) inspBtn.addEventListener('click', () => toggleInspector());
     const sideClose = byId('arch-side-close');
     if (sideClose) sideClose.addEventListener('click', () => showInspector(false));
-    const layoutSeg = byId('arch-layout');
-    if (layoutSeg) layoutSeg.addEventListener('click', (event) => {
-      const btn = event.target.closest('[data-layout]');
-      if (btn) setLayout(btn.dataset.layout);
-    });
-    const routeSeg = byId('arch-route');
-    if (routeSeg) routeSeg.addEventListener('click', (event) => {
-      const btn = event.target.closest('[data-route]');
-      if (btn) setRoute(btn.dataset.route);
-    });
-    const expandBtn = byId('arch-expand');
-    if (expandBtn) expandBtn.addEventListener('click', () => setExpanded());
-    const menu = byId('arch-menu');
-    const menuBtn = byId('arch-menu-btn');
-    const canvasEl = byId('arch-canvas');
-    const legendBtn = byId('arch-legend-btn');
-    const closeMenu = () => {
-      if (!menu) return;
-      menu.classList.remove('open');
-      if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
-    };
-    const placeMenu = () => {
-      if (!menuPanel || !menuBtn) return;
-      const r = menuBtn.getBoundingClientRect();
-      const margin = 8;
-      const below = window.innerHeight - r.bottom - margin - 12;
-      menuPanel.style.top = Math.round(r.bottom + margin) + 'px';
-      menuPanel.style.right = Math.max(margin, Math.round(window.innerWidth - r.right)) + 'px';
-      menuPanel.style.left = 'auto';
-      menuPanel.style.maxHeight = Math.max(180, Math.min(440, below)) + 'px';
-    };
-    if (menuBtn && menu) {
-      menuBtn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const open = !menu.classList.contains('open');
-        if (open) placeMenu();
-        menu.classList.toggle('open', open);
-        menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-      });
-    }
-    const menuPanel = byId('arch-menu-panel');
-    if (menuPanel) menuPanel.addEventListener('click', (event) => {
-      if (event.target.closest('button')) closeMenu();
-    });
-    document.addEventListener('click', (event) => {
-      if (menu && !menu.contains(event.target)) closeMenu();
-    });
-    if (legendBtn && canvasEl) {
-      legendBtn.addEventListener('click', () => {
-        const on = canvasEl.classList.toggle('legend-on');
-        legendBtn.classList.toggle('on', on);
-        legendBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-      });
+
+    menuEl = byId('arch-menu');
+    menuBtn = byId('arch-menu-btn');
+    menuScrim = byId('arch-menu-scrim');
+    const toolbar = byId('arch-toolbar');
+    if (toolbar) toolbar.addEventListener('click', onControl);
+    if (menuEl) menuEl.addEventListener('click', onControl);
+    if (menuBtn) menuBtn.addEventListener('click', (event) => { event.stopPropagation(); setMenu(!!(menuEl && menuEl.hidden)); });
+    if (menuScrim) menuScrim.addEventListener('click', () => setMenu(false));
+    window.addEventListener('resize', () => { if (menuEl && !menuEl.hidden) placeMenu(); });
+
+    // re-fit when the canvas changes size (rotation, side panels, window resize)
+    let sizeRaf = 0;
+    const queueResize = () => { cancelAnimationFrame(sizeRaf); sizeRaf = requestAnimationFrame(onCanvasResize); };
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(queueResize).observe(svg);
+    else window.addEventListener('resize', queueResize);
+    if (PORTRAIT) {
+      const onTurn = () => { queueResize(); syncControls(); };
+      if (PORTRAIT.addEventListener) PORTRAIT.addEventListener('change', onTurn);
+      else if (PORTRAIT.addListener) PORTRAIT.addListener(onTurn);
     }
 
     document.querySelectorAll('#arch-modal [data-atab]').forEach((btn) => {
@@ -142,6 +115,7 @@ const DesignGraph = (() => {
     });
 
     svg.addEventListener('click', (event) => {
+      if (state.moved) { state.moved = false; return; }
       const title = event.target.closest('[data-flow-title]');
       if (title) {
         const row = Number(title.dataset.flowTitle);
@@ -152,9 +126,7 @@ const DesignGraph = (() => {
       if (node) { selectNode(node.dataset.node); return; }
       const edge = event.target.closest('[data-edge]');
       if (edge) { selectEdge(Number(edge.dataset.edge)); return; }
-      const down = state.downAt;
-      const dragged = down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > 4;
-      if (!dragged && hasFocus()) clearFocus();
+      if (hasFocus()) clearFocus();
     });
 
     svg.addEventListener('mouseover', (event) => {
@@ -174,38 +146,62 @@ const DesignGraph = (() => {
       zoom(factor, svgPoint(event));
     }, { passive: false });
 
+    // one finger or the mouse pans (from anywhere, even on a component); two fingers pinch to zoom
     svg.addEventListener('pointerdown', (event) => {
-      state.downAt = { x: event.clientX, y: event.clientY };
-      if (event.target.closest('[data-node]') || event.target.closest('[data-edge]')) return;
-      state.panning = true;
-      state.last = { x: event.clientX, y: event.clientY };
-      svg.classList.add('dragging');
-      try { svg.setPointerCapture(event.pointerId); } catch (e) { /* ignore */ }
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      state.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (state.pointers.size === 1) {
+        state.moved = false;
+        state.downAt = { x: event.clientX, y: event.clientY };
+        state.panning = true;
+        state.last = { x: event.clientX, y: event.clientY };
+      } else if (state.pointers.size === 2) {
+        const [p, q] = [...state.pointers.values()];
+        state.pinch = { d: Math.hypot(p.x - q.x, p.y - q.y), mid: { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 } };
+        state.panning = false;
+        state.moved = true;
+        try { svg.setPointerCapture(event.pointerId); } catch (e) { /* ignore */ }
+      }
     });
     svg.addEventListener('pointermove', (event) => {
+      if (!state.pointers.has(event.pointerId)) return;
+      state.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (state.pinch && state.pointers.size >= 2) {
+        const [p, q] = [...state.pointers.values()];
+        const d = Math.hypot(p.x - q.x, p.y - q.y);
+        const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+        panBy(mid.x - state.pinch.mid.x, mid.y - state.pinch.mid.y);
+        if (d > 0 && state.pinch.d > 0) zoom(state.pinch.d / d, svgPointAt(mid.x, mid.y));
+        state.pinch = { d, mid };
+        return;
+      }
       if (!state.panning || !state.last) return;
-      const rect = svg.getBoundingClientRect();
-      const dx = (event.clientX - state.last.x) * state.target.w / rect.width;
-      const dy = (event.clientY - state.last.y) * state.target.h / rect.height;
-      state.target.x -= dx;
-      state.target.y -= dy;
+      if (!state.moved) {
+        if (Math.hypot(event.clientX - state.downAt.x, event.clientY - state.downAt.y) < 6) return;
+        state.moved = true;
+        svg.classList.add('dragging');
+        try { svg.setPointerCapture(event.pointerId); } catch (e) { /* ignore */ }
+      }
+      panBy(event.clientX - state.last.x, event.clientY - state.last.y);
       state.last = { x: event.clientX, y: event.clientY };
-      animateView(32);
     });
-    const endPan = () => { state.panning = false; state.last = null; svg.classList.remove('dragging'); };
-    svg.addEventListener('pointerup', endPan);
-    svg.addEventListener('pointercancel', endPan);
+    const endPointer = (event) => {
+      state.pointers.delete(event.pointerId);
+      if (state.pointers.size < 2) state.pinch = null;
+      if (state.pointers.size === 1) {
+        const [p] = [...state.pointers.values()];
+        state.panning = true;
+        state.last = { x: p.x, y: p.y };
+        return;
+      }
+      if (!state.pointers.size) { state.panning = false; state.last = null; svg.classList.remove('dragging'); }
+    };
+    svg.addEventListener('pointerup', endPointer);
+    svg.addEventListener('pointercancel', endPointer);
 
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
-      const openMenu = byId('arch-menu');
-      if (openMenu && openMenu.classList.contains('open')) {
-        event.stopImmediatePropagation();
-        openMenu.classList.remove('open');
-        const b = byId('arch-menu-btn');
-        if (b) b.setAttribute('aria-expanded', 'false');
-        return;
-      }
+      if (menuEl && !menuEl.hidden) { event.stopImmediatePropagation(); setMenu(false); return; }
       if (modal.classList.contains('expanded')) { event.stopImmediatePropagation(); setExpanded(false); return; }
       if (modal.classList.contains('on')) close();
     });
@@ -237,6 +233,7 @@ const DesignGraph = (() => {
     modal.classList.toggle('inline', inline);
     modal.classList.toggle('on', !inline);
     buildLegend();
+    applyLegend();
     render();
     resetView(true);
     setTab('inspect');
@@ -246,8 +243,101 @@ const DesignGraph = (() => {
     emit();
   }
 
+  /* ---------- canvas settings: gear menu, direction, legend ---------- */
+  function onControl(event) {
+    const b = event.target.closest('button');
+    if (!b || b === menuBtn) return;
+    const d = b.dataset;
+    if (d.layout) setLayout(d.layout);
+    else if (d.route) setRoute(d.route);
+    else if (d.dir) setDir(d.dir);
+    else if (d.legend) setLegend(d.legend === 'on');
+    else if (d.act === 'fit') { setMenu(false); resetView(); }
+    else if (d.act === 'expand') { setMenu(false); setExpanded(); }
+    else if (d.act === 'close-menu') setMenu(false);
+  }
+
+  function setMenu(open) {
+    if (!menuEl) return;
+    if (open) {
+      const canvas = byId('arch-canvas');
+      menuEl.classList.toggle('narrow', !!canvas && canvas.clientWidth < 640);
+      syncControls();
+    }
+    menuEl.hidden = !open;
+    if (menuScrim) menuScrim.hidden = !open;
+    if (open) placeMenu();
+    if (menuBtn) {
+      menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      menuBtn.classList.toggle('on', open);
+    }
+  }
+
+  /** Drop-down under the gear; phone CSS turns it into a bottom sheet and ignores these offsets. */
+  function placeMenu() {
+    if (!menuBtn || !menuEl) return;
+    const r = menuBtn.getBoundingClientRect();
+    menuEl.style.top = Math.round(r.bottom + 8) + 'px';
+    menuEl.style.right = Math.max(8, Math.round(window.innerWidth - r.right)) + 'px';
+    menuEl.style.maxHeight = Math.max(220, Math.round(window.innerHeight - r.bottom - 20)) + 'px';
+  }
+
+  /** Auto: top → down when the device is upright (phone or tablet), or the map area is too narrow for left → right. */
+  function topDown() {
+    if (state.dir === 'td') return true;
+    if (state.dir === 'lr') return false;
+    const portrait = PORTRAIT ? PORTRAIT.matches : window.innerHeight > window.innerWidth;
+    const canvas = byId('arch-canvas');
+    const cw = canvas ? canvas.clientWidth : 0;
+    return (portrait && window.innerWidth < 900) || (cw > 0 && cw < 560);
+  }
+
+  function setDir(dir) {
+    state.dir = dir === 'td' || dir === 'lr' ? dir : 'auto';
+    save('gs.arch.dir', state.dir);
+    if (state.g && topDown() !== (state.flowDir === 'td')) { render(); restoreHighlight(); resetView(true); }
+    syncControls();
+  }
+
+  function legendShown() {
+    if (state.legend) return state.legend === 'on';
+    const canvas = byId('arch-canvas');
+    return !canvas || !canvas.clientWidth || canvas.clientWidth >= 640;
+  }
+
+  function setLegend(on) {
+    state.legend = on ? 'on' : 'off';
+    save('gs.arch.legend', state.legend);
+    applyLegend();
+  }
+
+  function applyLegend() {
+    const canvas = byId('arch-canvas');
+    if (canvas) {
+      canvas.classList.toggle('legend-on', state.legend === 'on');
+      canvas.classList.toggle('legend-off', state.legend === 'off');
+    }
+    syncControls();
+  }
+
+  function syncControls() {
+    const each = (attr, fn) => document.querySelectorAll(`#arch-toolbar [${attr}], #arch-menu [${attr}]`).forEach(fn);
+    each('data-layout', (b) => b.classList.toggle('on', b.dataset.layout === state.layout));
+    each('data-route', (b) => b.classList.toggle('on', b.dataset.route === state.route));
+    each('data-dir', (b) => b.classList.toggle('on', b.dataset.dir === state.dir));
+    const shown = legendShown();
+    each('data-legend', (b) => b.classList.toggle('on', (b.dataset.legend === 'on') === shown));
+    const note = byId('arch-dir-note');
+    if (note) {
+      note.textContent = state.dir === 'auto'
+        ? `Auto is using ${topDown() ? 'top → down' : 'left → right'} here. It goes top → down when the screen is upright or the map area is narrow.`
+        : `Always ${state.dir === 'td' ? 'top → down' : 'left → right'}. Choose Auto to follow the screen.`;
+    }
+  }
+
   function close() {
     if (!modal) return;
+    setMenu(false);
     if (state.raf) cancelAnimationFrame(state.raf);
     state.raf = null;
     modal.classList.remove('on', 'inline', 'inspector-open', 'expanded');
@@ -300,6 +390,85 @@ const DesignGraph = (() => {
     return { positions, W, H, rows, nw, nh: NH, labelMax, subMax, colw, rowh };
   }
 
+  // top → down sizing: as many components per row as stay readable at the canvas width
+  const TD = { nw: 188, gap: 16, side: 24, top: 70, head: 28, rowGap: 30, bandGap: 72, minScale: 0.76 };
+
+  function columnsThatFit(cw) {
+    const width = cw == null ? drawingArea().cw : cw;
+    if (!(width > 0)) return 2;
+    const room = width / TD.minScale - TD.side * 2 + TD.gap;
+    return Math.max(1, Math.min(6, Math.floor(room / (TD.nw + TD.gap))));
+  }
+
+  /** Layers become horizontal bands stacked top to bottom; a band wraps onto more rows when it is wider than the screen. */
+  function layoutTD() {
+    const graph = state.g;
+    const { nw, gap, side, head, rowGap, bandGap } = TD;
+    const per = state.perRow = columnsThatFit();
+    const W = side * 2 + per * nw + (per - 1) * gap;
+    const positions = new Map();
+    const bands = [];
+    let y = TD.top;
+    graph.layers.forEach((layer) => {
+      const nodes = graph.nodes.filter((node) => node.layer === layer);
+      if (!nodes.length) return;
+      const rowsN = Math.ceil(nodes.length / per);
+      nodes.forEach((node, i) => {
+        const r = Math.floor(i / per);
+        const inRow = Math.min(per, nodes.length - r * per);
+        const x0 = (W - (inRow * nw + (inRow - 1) * gap)) / 2;
+        positions.set(node.id, { x: x0 + (i % per) * (nw + gap), y: y + head + r * (NH + rowGap) });
+      });
+      const bottom = y + head + rowsN * NH + (rowsN - 1) * rowGap;
+      bands.push({ layer, top: y, bottom });
+      y = bottom + bandGap;
+    });
+    const H = y - bandGap + 36;
+    return { positions, W, H, nw, nh: NH, labelMax: 0, subMax: 0, bands };
+  }
+
+  /**
+   * Path for a top → down edge. Down to a lower band leaves the bottom of the box and enters the top;
+   * across a row runs side to side; back up (responses) runs along the nearer outer edge of the map.
+   */
+  function tdRoute(a, b, nw, nh, index, W) {
+    const ortho = state.route === 'ortho';
+    const acx = a.x + nw / 2, bcx = b.x + nw / 2;
+    if (b.y >= a.y + nh) {
+      const lean = Math.max(-nw / 3, Math.min(nw / 3, (bcx - acx) * 0.18));
+      const x1 = acx + lean, y1 = a.y + nh, x2 = bcx - lean, y2 = b.y;
+      if (ortho) {
+        if (Math.abs(x1 - x2) < 1) return { d: `M ${x1} ${y1} V ${y2}`, lx: x1, ly: (y1 + y2) / 2 };
+        const my = Math.round(y2 - TD.bandGap / 2 + ((index % 3) - 1) * 7);
+        return { d: `M ${x1} ${y1} V ${my} H ${x2} V ${y2}`, lx: (x1 + x2) / 2, ly: my - 5 };
+      }
+      const dy = Math.max(28, (y2 - y1) * 0.45);
+      return { d: `M ${x1} ${y1} C ${x1} ${y1 + dy}, ${x2} ${y2 - dy}, ${x2} ${y2}`, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 + ((index % 3) - 1) * 6 };
+    }
+    if (Math.abs(b.y - a.y) < 1) {
+      const right = b.x > a.x;
+      const y = a.y + nh / 2;
+      if (Math.abs(b.x - a.x) <= nw + TD.gap + 1) {
+        const x1 = right ? a.x + nw : a.x, x2 = right ? b.x : b.x + nw;
+        return { d: `M ${x1} ${y} H ${x2}`, lx: (x1 + x2) / 2, ly: y - 10 };
+      }
+      const lift = 24 + (index % 3) * 6;
+      const x1 = acx + (right ? 12 : -12), x2 = bcx + (right ? -12 : 12);
+      return ortho
+        ? { d: `M ${x1} ${a.y} V ${a.y - lift} H ${x2} V ${b.y}`, lx: (x1 + x2) / 2, ly: a.y - lift - 5 }
+        : { d: `M ${x1} ${a.y} C ${x1} ${a.y - lift}, ${x2} ${b.y - lift}, ${x2} ${b.y}`, lx: (x1 + x2) / 2, ly: a.y - lift * 0.75 - 4 };
+    }
+    const right = (acx + bcx) / 2 >= W / 2;
+    const x1 = right ? a.x + nw : a.x, x2 = right ? b.x + nw : b.x;
+    const y1 = a.y + nh / 2 + 6, y2 = b.y + nh / 2 - 6;
+    const off = 10 + (index % 3) * 5;
+    const lane = right ? Math.max(x1, x2) + off : Math.min(x1, x2) - off;
+    const d = ortho
+      ? `M ${x1} ${y1} H ${lane} V ${y2} H ${x2}`
+      : `M ${x1} ${y1} C ${lane + (right ? 8 : -8)} ${y1}, ${lane + (right ? 8 : -8)} ${y2}, ${x2} ${y2}`;
+    return { d, lx: lane + (right ? -4 : 4), ly: (y1 + y2) / 2, lane: true, anchor: right ? 'end' : 'start' };
+  }
+
   function svgDefs() {
     return `<defs>
       <marker id="arch-arrow-sync" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -319,34 +488,43 @@ const DesignGraph = (() => {
 
   function renderSVG() {
     const graph = state.g;
-    const { positions, W, H, nw, nh, labelMax, subMax, colw } = layout();
+    const td = state.flowDir === 'td';
+    const L = td ? layoutTD() : layout();
+    const { positions, W, H, nw, nh, labelMax, subMax } = L;
     state.W = W;
     state.H = H;
 
     const defs = svgDefs();
 
-    const layers = graph.layers.map((layer, i) => {
-      const x = LEFT + i * colw + nw / 2;
-      return `<text class="arch-layer" x="${x}" y="38" text-anchor="middle" fill="${colorFor(layer)}">${esc(layer.toUpperCase())}</text>
+    const layers = td
+      ? L.bands.map(({ layer, top }) => `<text class="arch-layer" x="${TD.side}" y="${top + 13}" fill="${colorFor(layer)}">${esc(layer.toUpperCase())}</text>
+        <line x1="${TD.side}" y1="${top + 20}" x2="${W - TD.side}" y2="${top + 20}" stroke="${colorFor(layer)}" stroke-opacity=".14"></line>`).join('')
+      : graph.layers.map((layer, i) => {
+        const x = LEFT + i * L.colw + nw / 2;
+        return `<text class="arch-layer" x="${x}" y="38" text-anchor="middle" fill="${colorFor(layer)}">${esc(layer.toUpperCase())}</text>
         <line x1="${x}" y1="52" x2="${x}" y2="${H - 22}" stroke="${colorFor(layer)}" stroke-opacity=".14"></line>`;
-    }).join('');
+      }).join('');
 
     const labelMarkup = [];
     const edgeMarkup = graph.edges.map((edge, index) => {
       const from = positions.get(edge.from);
       const to = positions.get(edge.to);
       if (!from || !to) return '';
-      const x1 = from.x + nw, y1 = from.y + nh / 2;
-      const x2 = to.x, y2 = to.y + nh / 2;
-      const forward = x2 >= x1;
-      const route = layerRoute(x1, y1, x2, y2, forward, index, nh);
+      let route, x1, y1, x2, y2;
+      if (td) {
+        route = tdRoute(from, to, nw, nh, index, W);
+        x1 = from.x; y1 = from.y; x2 = to.x; y2 = to.y;
+      } else {
+        x1 = from.x + nw; y1 = from.y + nh / 2;
+        x2 = to.x; y2 = to.y + nh / 2;
+        route = layerRoute(x1, y1, x2, y2, x2 >= x1, index, nh);
+      }
       const d = route.d;
       const targetNode = nodeMap.get(edge.to);
       const isReturn = !!(targetNode && (targetNode.layer === 'Client' || targetNode.layer === 'Consumers' || targetNode.id === 'recipient' || targetNode.id === 'user'));
-      const labelX = route.lx;
-      const labelY = route.ly;
       if (edge.kind !== 'obs') {
-        labelMarkup.push(`<g class="edge-label-wrap ${edge.kind}${isReturn ? ' return' : ''}" data-edge="${index}"><text class="arch-edge-label ${edge.kind}" x="${labelX}" y="${labelY}" text-anchor="middle">${esc(edge.label)}</text></g>`);
+        // labels on the outer lanes would hang off the screen edge, so they appear only when the connection is highlighted
+        labelMarkup.push(`<g class="edge-label-wrap ${edge.kind}${isReturn ? ' return' : ''}${route.lane ? ' lane crowded' : ''}" data-edge="${index}"><text class="arch-edge-label ${edge.kind}" x="${route.lx}" y="${route.ly}" text-anchor="${route.anchor || 'middle'}">${esc(edge.label)}</text></g>`);
       }
       const distance = Math.hypot(x2 - x1, y2 - y1) + 90;
       const duration = Math.min(5.4, Math.max(2.2, distance / 260)) + (edge.kind === 'async' ? 0.7 : edge.kind === 'obs' ? 1.5 : 0);
@@ -529,11 +707,9 @@ const DesignGraph = (() => {
     state.view.w = state.target.w;
     state.view.h = state.target.h;
     const kept = { x: state.view.x, y: state.view.y, w: state.view.w, h: state.view.h };
-    const flow = state.flow, sel = state.selected, edge = state.selectedEdge;
     render({ preserveView: true });
-    if (flow >= 0) startFlowAt(flow);
-    else if (sel) selectNode(sel);
-    else if (edge != null) selectEdge(edge);
+    restoreHighlight();
+    syncControls();
     const restore = () => {
       state.view.x = kept.x; state.view.y = kept.y; state.view.w = kept.w; state.view.h = kept.h;
       state.target.x = kept.x; state.target.y = kept.y; state.target.w = kept.w; state.target.h = kept.h;
@@ -546,6 +722,96 @@ const DesignGraph = (() => {
   function isReturnEdge(edge) {
     const t = nodeMap.get(edge.to);
     return !!(t && (t.layer === 'Client' || t.layer === 'Consumers'));
+  }
+
+  /** The order each user action visits its components, starting with the first hop. */
+  function flowOrders() {
+    return state.g.flow.map((step) => {
+      const order = [];
+      step.edges.forEach(([a, b]) => { if (!order.includes(a)) order.push(a); if (!order.includes(b)) order.push(b); });
+      step.nodes.forEach((id) => { if (!order.includes(id)) order.push(id); });
+      return order;
+    });
+  }
+
+  function pathTitle(step, r, max) {
+    const tag = step.kind ? (step.kind === 'write' ? 'WRITE PATH' : step.kind === 'read' ? 'READ PATH' : 'BEHIND THE SCENES') : '';
+    const room = max ? Math.max(12, max - (tag ? tag.length + 2 : 0)) : 999;
+    return (tag ? `<tspan class="rw-tag rw-${step.kind === 'background' ? 'bg' : step.kind}">${tag}</tspan><tspan dx="8">` : '<tspan>')
+      + `${esc(cut(`${r + 1}. ${step.title}`, room))}</tspan>`;
+  }
+
+  /**
+   * Top → down User actions: each action is a section, its components stacked in hop order.
+   * Skips forward curve down the right side, responses curve back up the left side.
+   */
+  function renderPathViewTD() {
+    const graph = state.g;
+    const nw = TD.nw, nh = NH, vgap = 50, side = 112, head = 40, sectionGap = 34;
+    const ortho = state.route === 'ortho';
+    const W = side * 2 + nw;
+    const cx = W / 2, x0 = side;
+    const orders = flowOrders();
+    let y = 58;
+    let body = '';
+    graph.flow.forEach((step, r) => {
+      const order = orders[r];
+      const top = y;
+      const ny = (id) => top + head + order.indexOf(id) * (nh + vgap);
+      const height = head + order.length * nh + (order.length - 1) * vgap + 18;
+      let edgesSvg = '', labelsSvg = '';
+      step.edges.forEach(([a, b], k) => {
+        const gi = graph.edges.findIndex((e) => e.from === a && e.to === b);
+        const edge = graph.edges[gi];
+        if (!edge) return;
+        const ia = order.indexOf(a), ib = order.indexOf(b);
+        const ya = ny(a), yb = ny(b);
+        const ret = isReturnEdge(edge);
+        let d, bx, by, lx, anchor;
+        if (ib === ia + 1) {
+          d = `M ${cx} ${ya + nh} V ${yb}`;
+          bx = cx; by = (ya + nh + yb) / 2; lx = cx + 16; anchor = 'start';
+        } else {
+          const right = ib > ia;
+          const edgeX = right ? x0 + nw : x0;
+          const y1 = ya + nh / 2 + (right ? 8 : -8), y2 = yb + nh / 2 + (right ? -8 : 8);
+          const lane = edgeX + (right ? 1 : -1) * (24 + Math.min(4, Math.abs(ib - ia)) * 7);
+          d = ortho
+            ? `M ${edgeX} ${y1} H ${lane} V ${y2} H ${edgeX}`
+            : `M ${edgeX} ${y1} C ${lane} ${y1}, ${lane} ${y2}, ${edgeX} ${y2}`;
+          bx = ortho ? lane : edgeX + (lane - edgeX) * 0.75;
+          by = (y1 + y2) / 2;
+          lx = bx + (right ? 15 : -15);
+          anchor = right ? 'start' : 'end';
+        }
+        const pid = `arch-pp-${r}-${k}`;
+        // ~6.6 units per character of label text; the full label is in the tooltip and the side panel
+        const room = anchor === 'end' ? lx - 6 : W - 6 - lx;
+        edgesSvg += `<g class="arch-edge-group ${edge.kind}${ret ? ' return' : ''}" data-edge="${gi}">
+          <path id="${pid}" class="arch-edge ${edge.kind}${ret ? ' return' : ''}" d="${d}" marker-end="url(#arch-arrow-${ret ? 'return' : edge.kind})"></path>
+          ${packetMarkup(edge.kind, pid, 160, k)}
+          <title>${k + 1}. ${esc(nodeLabel(a))} → ${esc(nodeLabel(b))}: ${esc(edge.detail || edge.label)}</title>
+        </g>`;
+        labelsSvg += `<g class="edge-label-wrap ${edge.kind}${ret ? ' return' : ''}" data-edge="${gi}">
+          <g class="hop-badge" transform="translate(${bx},${by})"><circle r="10"></circle><text y="4" text-anchor="middle">${k + 1}</text></g>
+          <text class="arch-edge-label ${edge.kind}" x="${lx}" y="${by + 4}" text-anchor="${anchor}">${esc(cut(edge.label, Math.max(4, Math.floor(room / 6.6))))}</text>
+        </g>`;
+      });
+      const nodesSvg = order.map((id) => {
+        const node = nodeMap.get(id);
+        return node ? nodeShape(node, x0, ny(id), nw, nh, 0, 0) : '';
+      }).join('');
+      body += `<g class="path-row" data-row="${r}">
+        <rect class="path-row-bg" x="10" y="${top - 6}" width="${W - 20}" height="${height}" rx="12"></rect>
+        <text class="path-row-title" x="22" y="${top + 20}" data-flow-title="${r}">${pathTitle(step, r, 40)}</text>
+        ${edgesSvg}${nodesSvg}<g class="edge-labels">${labelsSvg}</g>
+      </g>`;
+      y = top + height + sectionGap;
+    });
+    state.W = W;
+    state.H = y - sectionGap + 20;
+    svg.innerHTML = svgDefs() + `<text class="arch-layer" x="22" y="34" fill="#8fa3bf">USER ACTIONS</text>` + body;
+    clearHighlights();
   }
 
   /* ---------- Paths layout: one row per request path, every hop numbered ---------- */
@@ -642,6 +908,7 @@ const DesignGraph = (() => {
     const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
     const placed = [];
     svg.querySelectorAll('.edge-label-wrap').forEach((wrap) => {
+      if (wrap.classList.contains('lane')) return;
       const badge = wrap.querySelector('.hop-badge');
       if (badge) {
         const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(badge.getAttribute('transform') || '');
@@ -660,7 +927,8 @@ const DesignGraph = (() => {
         t.setAttribute('y', y0 + dy);
         const b = t.getBBox();
         const box = { x: b.x - 4, y: b.y - 2, w: b.width + 8, h: b.height + 4 };
-        if (!boxes.some((o) => hit(o, box)) && !placed.some((o) => hit(o, box))) {
+        const inside = b.x >= 0 && b.x + b.width <= state.W;
+        if (inside && !boxes.some((o) => hit(o, box)) && !placed.some((o) => hit(o, box))) {
           placed.push(box);
           free = true;
           break;
@@ -673,17 +941,64 @@ const DesignGraph = (() => {
 
   function render(options) {
     const preserve = !!(options && options.preserveView);
-    if (state.layout === 'paths') renderPathView();
+    state.flowDir = topDown() ? 'td' : 'lr';
+    if (state.layout === 'paths') { if (state.flowDir === 'td') renderPathViewTD(); else renderPathView(); }
     else renderSVG();
+    modal.classList.toggle('flow-td', state.flowDir === 'td');
     svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     if (preserve) applyView();
     else svg.setAttribute('viewBox', `0 0 ${state.W} ${state.H}`);
     declutterLabels();
     bindPulses();
-    const seg = byId('arch-layout');
-    if (seg) seg.querySelectorAll('[data-layout]').forEach((b) => b.classList.toggle('on', b.dataset.layout === state.layout));
-    const routeSeg = byId('arch-route');
-    if (routeSeg) routeSeg.querySelectorAll('[data-route]').forEach((b) => b.classList.toggle('on', b.dataset.route === state.route));
+    syncControls();
+  }
+
+  /** Put back the selection or user-action highlight after a redraw, without touching the side panel. */
+  function restoreHighlight() {
+    if (!state.g) return;
+    if (state.flow >= 0 && state.g.flow[state.flow]) {
+      const step = state.g.flow[state.flow];
+      const edges = step.edges.map(([from, to]) => state.g.edges.findIndex((e) => e.from === from && e.to === to)).filter((i) => i >= 0);
+      focusNodes(step.nodes, edges, 'flow');
+      svg.querySelectorAll('.path-row').forEach((row) => row.classList.toggle('off', Number(row.dataset.row) !== state.flow));
+    } else if (state.selected != null && nodeMap.get(state.selected)) {
+      const connected = edgesByNode.get(state.selected) || [];
+      const nodes = new Set([state.selected]);
+      connected.forEach((i) => { nodes.add(state.g.edges[i].from); nodes.add(state.g.edges[i].to); });
+      focusNodes(nodes, connected, 'node');
+      const el = svg.querySelector(`[data-node="${state.selected}"]`);
+      if (el) el.classList.add('selected');
+    } else if (state.selectedEdge != null && state.g.edges[state.selectedEdge]) {
+      const e = state.g.edges[state.selectedEdge];
+      focusNodes([e.from, e.to], [state.selectedEdge], 'node');
+    }
+  }
+
+  function needsRedraw(cw) {
+    const td = topDown();
+    return td !== (state.flowDir === 'td') || (td && state.layout !== 'paths' && columnsThatFit(cw) !== state.perRow);
+  }
+
+  /** The canvas changed size: redraw if the direction or row width must change, otherwise keep the zoom. */
+  function onCanvasResize() {
+    if (!state.g || !svg) return;
+    const { cw, ch } = drawingArea();
+    if (!(cw > 0 && ch > 0)) return;
+    if (needsRedraw(cw)) {
+      render();
+      restoreHighlight();
+      resetView(true);
+      return;
+    }
+    const prev = state.box;
+    if (prev && Math.abs(prev.cw - cw) < 1 && Math.abs(prev.ch - ch) < 1) return;
+    if (state.fitted || !prev) { resetView(true); return; }
+    if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+    const perPx = state.target.w / prev.cw;
+    state.target = { x: state.target.x, y: state.target.y, w: perPx * cw, h: perPx * ch };
+    state.view = Object.assign({}, state.target);
+    state.box = { cw, ch };
+    applyView();
   }
 
   function setLayout(layout) {
@@ -703,37 +1018,54 @@ const DesignGraph = (() => {
     const next = typeof on === 'boolean' ? on : !modal.classList.contains('expanded');
     modal.classList.toggle('expanded', next);
     document.body.classList.toggle('arch-expanded', next);
-    const btn = byId('arch-expand');
-    if (btn) {
+    document.querySelectorAll('#arch-toolbar [data-act="expand"], #arch-menu [data-act="expand"]').forEach((btn) => {
       btn.classList.toggle('on', next);
-      btn.textContent = next ? '⤡' : '⤢';
       btn.title = next ? 'Exit full screen (Esc)' : 'Expand canvas to full screen (E · Esc to exit)';
       btn.setAttribute('aria-label', next ? 'Exit full screen' : 'Expand canvas');
-    }
+      const icon = btn.querySelector('.tb-expand-icon');
+      if (icon) icon.textContent = next ? '⤡' : '⤢';
+      const text = btn.querySelector('.tb-expand-label');
+      if (text) text.textContent = next ? 'Exit full screen' : 'Full screen';
+    });
     requestAnimationFrame(() => resetView(true));
   }
 
   function svgPoint(event) {
+    return svgPointAt(event.clientX, event.clientY);
+  }
+
+  function svgPointAt(clientX, clientY) {
     const point = svg.createSVGPoint();
-    point.x = event.clientX;
-    point.y = event.clientY;
+    point.x = clientX;
+    point.y = clientY;
     const matrix = svg.getScreenCTM();
     return matrix ? point.matrixTransform(matrix.inverse()) : { x: state.W / 2, y: state.H / 2 };
+  }
+
+  /** Move the map by a distance in screen pixels. */
+  function panBy(dx, dy) {
+    const { cw, ch } = drawingArea();
+    if (!(cw > 0 && ch > 0)) return;
+    const perPx = Math.max(state.target.w / cw, state.target.h / ch);
+    state.target.x -= dx * perPx;
+    state.target.y -= dy * perPx;
+    state.fitted = false;
+    animateView(32);
   }
 
   function applyView() {
     svg.setAttribute('viewBox', `${state.view.x} ${state.view.y} ${state.view.w} ${state.view.h}`);
     const v = state.view;
-    const more = v.x + v.w < state.W - 4 || v.y + v.h < state.H - 4;
+    const right = v.x + v.w < state.W - 4, below = v.y + v.h < state.H - 4;
     const canvas = svg.parentElement;
     let hint = canvas.querySelector('.arch-more');
     if (!hint) {
       hint = document.createElement('div');
       hint.className = 'arch-more';
-      hint.textContent = 'Drag to see more →';
       canvas.appendChild(hint);
     }
-    hint.classList.toggle('on', more);
+    hint.textContent = right ? 'Drag to see more →' : 'Drag up to see more ↓';
+    hint.classList.toggle('on', right || below);
     const label = byId('arch-zoom');
     if (label) label.textContent = Math.round((state.W / state.view.w) * 100) + '%';
   }
@@ -778,17 +1110,37 @@ const DesignGraph = (() => {
     };
   }
 
-  /** Fit the whole map if it stays readable; otherwise open at a readable zoom from the top-left. */
+  /** A view box with the canvas's shape that shows the whole w × h area, centered. */
+  function centeredBox(w, h, aspect) {
+    if (w / h > aspect) { const bh = w / aspect; return { x: 0, y: (h - bh) / 2, w, h: bh }; }
+    const bw = h * aspect;
+    return { x: (w - bw) / 2, y: 0, w: bw, h };
+  }
+
+  /**
+   * Top → down: fill the width, starting at the top. Left → right: fit the whole map when it stays readable
+   * or the screen is a phone; otherwise open at a readable zoom from the top-left.
+   */
   function resetView(immediate = false) {
-    let w = state.W, h = state.H;
     const { cw, ch } = drawingArea();
-    if (cw > 0 && ch > 0 && Math.min(cw / w, ch / h) < MIN_READABLE_SCALE) {
-      w = cw / MIN_READABLE_SCALE;
-      h = ch / MIN_READABLE_SCALE;
+    let box = { x: 0, y: 0, w: state.W, h: state.H };
+    if (cw > 0 && ch > 0) {
+      const aspect = cw / ch;
+      if (state.flowDir === 'td') {
+        const h = state.W / aspect;
+        box = { x: 0, y: h > state.H ? (state.H - h) / 2 : 0, w: state.W, h };
+      } else if (Math.min(cw / state.W, ch / state.H) >= MIN_READABLE_SCALE || Math.min(window.innerWidth, window.innerHeight) <= 520) {
+        box = centeredBox(state.W, state.H, aspect);
+      } else {
+        box = { x: 0, y: 0, w: cw / MIN_READABLE_SCALE, h: ch / MIN_READABLE_SCALE };
+      }
+      state.box = { cw, ch };
     }
-    state.target = { x: 0, y: 0, w, h };
+    state.target = box;
+    state.fitted = true;
     if (immediate) {
-      state.view = { x: 0, y: 0, w, h };
+      if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+      state.view = Object.assign({}, box);
       applyView();
       return;
     }
@@ -796,6 +1148,7 @@ const DesignGraph = (() => {
   }
 
   function zoomAt(factor, anchor) {
+    state.fitted = false;
     const base = state.target;
     const minW = state.W * 0.35;
     const maxW = state.W * 1.9;
@@ -879,11 +1232,28 @@ const DesignGraph = (() => {
     });
     focusNodes(nodes, connected, 'node');
     const el = svg.querySelector(`[data-node="${id}"]`);
-    if (el) el.classList.add('selected');
+    if (el) {
+      el.classList.add('selected');
+      const [x, y, w, h] = (el.dataset.box || '').split(',').map(Number);
+      if (w) revealBox(x, y, w, h);
+    }
     setTab('inspect');
     renderInspector();
     showInspector(true);
     emit();
+  }
+
+  /** Pan along whichever axis is needed so the area is on screen (e.g. picked from the side panel while off-screen). */
+  function revealBox(x, y, w, h) {
+    const t = state.target;
+    const pad = 12;
+    let nx = t.x, ny = t.y;
+    if (x < t.x + pad || x + w > t.x + t.w - pad) nx = w > t.w ? x - pad : x + w / 2 - t.w / 2;
+    if (y < t.y + pad || y + h > t.y + t.h - pad) ny = h > t.h - pad * 2 ? y - pad * 3 : y + h / 2 - t.h / 2;
+    if (nx === t.x && ny === t.y) return;
+    state.target = { x: nx, y: ny, w: t.w, h: t.h };
+    state.fitted = false;
+    animateView(90);
   }
 
   function selectEdge(index) {
@@ -977,6 +1347,8 @@ const DesignGraph = (() => {
     )).filter((index) => index >= 0);
     focusNodes(step.nodes, edges, 'flow');
     svg.querySelectorAll('.path-row').forEach((row) => row.classList.toggle('off', Number(row.dataset.row) !== state.flow));
+    const bg = svg.querySelector(`.path-row[data-row="${state.flow}"] .path-row-bg`);
+    if (bg) revealBox(+bg.getAttribute('x'), +bg.getAttribute('y'), +bg.getAttribute('width'), +bg.getAttribute('height'));
     setTab('inspect');
     renderInspector();
     showInspector(true);
@@ -1149,14 +1521,17 @@ const DesignGraph = (() => {
         ${graph.sources.length ? `<ul>${graph.sources.map(([label, url]) => `<li><a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a></li>`).join('')}</ul>` : ''}
       </div>` : ''}
       <ol class="read-steps">
-        <li><b>Columns are layers.</b> Requests enter on the left (client) and go deeper to the right (services, queues, data).</li>
+        ${state.flowDir === 'td'
+          ? '<li><b>Rows are layers.</b> Requests enter at the top (client) and go deeper as you move down (services, queues, data).</li>'
+          : '<li><b>Columns are layers.</b> Requests enter on the left (client) and go deeper to the right (services, queues, data).</li>'}
         <li><b>Arrows are connections.</b> Solid blue = the caller waits (sync). Dashed amber = handed off to a queue (async). Mint = the answer going back to the user.</li>
-        <li><b>Switch to User actions</b> to see each thing a user does as its own row, hop by hop. Click a row title to highlight it.</li>
+        <li><b>Switch to User actions</b> to see each thing a user does on its own, hop by hop. Click its title to highlight it.</li>
+        <li><b>Change the direction</b> in the ⚙ settings: left → right, top → down, or Auto (follows how you hold the screen).</li>
         ${graph.aws
           ? '<li><b>Box colors are AWS categories</b> (compute, storage, database, AI…). <b>Click any box</b> to see what the service is, when to use it, what to pick instead, and how you pay.</li>'
           : '<li><b>Click any box</b> to see what it does, what goes wrong without it, and what happens if it breaks.</li>'}
       </ol>
-      <div class="arch-hint">Scroll to zoom · drag to pan · click empty canvas to clear.</div>`;
+      <div class="arch-hint">Scroll or pinch to zoom · drag to pan · tap empty canvas to clear.</div>`;
   }
 
   init();
@@ -1175,7 +1550,12 @@ const DesignGraph = (() => {
     setLayout,
     setRoute,
     /** Re-place labels and re-fit once the canvas is actually visible. */
-    relayout: () => { if (state.g && svg && svg.getBoundingClientRect().width) { declutterLabels(); resetView(true); } },
+    relayout: () => {
+      if (!state.g || !svg || !svg.getBoundingClientRect().width) return;
+      if (needsRedraw()) { render(); restoreHighlight(); } else declutterLabels();
+      applyLegend();
+      resetView(true);
+    },
     setExpanded,
     conceptCard,
     shapeIcon,
