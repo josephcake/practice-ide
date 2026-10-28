@@ -745,18 +745,33 @@ const DesignGraph = (() => {
    * Top → down User actions: each action is a section, its components stacked in hop order.
    * Skips forward curve down the right side, responses curve back up the left side.
    */
+  const PATH_COL = TD.nw + 224;
+
+  /** How many user actions fit side by side at a readable size. */
+  function pathColumnsThatFit(cw) {
+    const width = cw == null ? drawingArea().cw : cw;
+    const count = state.g ? state.g.flow.length : 1;
+    if (!(width > 0)) return 1;
+    return Math.max(1, Math.min(count, Math.floor(width / TD.minScale / PATH_COL)));
+  }
+
   function renderPathViewTD() {
     const graph = state.g;
     const nw = TD.nw, nh = NH, vgap = 50, side = 112, head = 40, sectionGap = 34;
     const ortho = state.route === 'ortho';
-    const W = side * 2 + nw;
-    const cx = W / 2, x0 = side;
+    const cols = state.pathCols = pathColumnsThatFit();
+    const colW = PATH_COL;
     const orders = flowOrders();
-    let y = 58;
+    const colY = new Array(cols).fill(58);
     let body = '';
     graph.flow.forEach((step, r) => {
       const order = orders[r];
-      const top = y;
+      // actions fill the columns left to right, each column stacking downward
+      const col = r % cols;
+      const ox = col * colW;
+      const W = colW;
+      const cx = ox + W / 2, x0 = ox + side;
+      const top = colY[col];
       const ny = (id) => top + head + order.indexOf(id) * (nh + vgap);
       const height = head + order.length * nh + (order.length - 1) * vgap + 18;
       let edgesSvg = '', labelsSvg = '';
@@ -786,7 +801,7 @@ const DesignGraph = (() => {
         }
         const pid = `arch-pp-${r}-${k}`;
         // ~6.6 units per character of label text; the full label is in the tooltip and the side panel
-        const room = anchor === 'end' ? lx - 6 : W - 6 - lx;
+        const room = anchor === 'end' ? lx - ox - 6 : ox + W - 6 - lx;
         edgesSvg += `<g class="arch-edge-group ${edge.kind}${ret ? ' return' : ''}" data-edge="${gi}">
           <path id="${pid}" class="arch-edge ${edge.kind}${ret ? ' return' : ''}" d="${d}" marker-end="url(#arch-arrow-${ret ? 'return' : edge.kind})"></path>
           ${packetMarkup(edge.kind, pid, 160, k)}
@@ -802,14 +817,14 @@ const DesignGraph = (() => {
         return node ? nodeShape(node, x0, ny(id), nw, nh, 0, 0) : '';
       }).join('');
       body += `<g class="path-row" data-row="${r}">
-        <rect class="path-row-bg" x="10" y="${top - 6}" width="${W - 20}" height="${height}" rx="12"></rect>
-        <text class="path-row-title" x="22" y="${top + 20}" data-flow-title="${r}">${pathTitle(step, r, 40)}</text>
+        <rect class="path-row-bg" x="${ox + 10}" y="${top - 6}" width="${W - 20}" height="${height}" rx="12"></rect>
+        <text class="path-row-title" x="${ox + 22}" y="${top + 20}" data-flow-title="${r}">${pathTitle(step, r, 40)}</text>
         ${edgesSvg}${nodesSvg}<g class="edge-labels">${labelsSvg}</g>
       </g>`;
-      y = top + height + sectionGap;
+      colY[col] = top + height + sectionGap;
     });
-    state.W = W;
-    state.H = y - sectionGap + 20;
+    state.W = cols * colW;
+    state.H = Math.max(...colY) - sectionGap + 20;
     svg.innerHTML = svgDefs() + `<text class="arch-layer" x="22" y="34" fill="#8fa3bf">USER ACTIONS</text>` + body;
     clearHighlights();
   }
@@ -976,7 +991,9 @@ const DesignGraph = (() => {
 
   function needsRedraw(cw) {
     const td = topDown();
-    return td !== (state.flowDir === 'td') || (td && state.layout !== 'paths' && columnsThatFit(cw) !== state.perRow);
+    if (td !== (state.flowDir === 'td')) return true;
+    if (!td) return false;
+    return state.layout === 'paths' ? pathColumnsThatFit(cw) !== state.pathCols : columnsThatFit(cw) !== state.perRow;
   }
 
   /** The canvas changed size: redraw if the direction or row width must change, otherwise keep the zoom. */
