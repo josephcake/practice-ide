@@ -2305,6 +2305,12 @@ body.sidebar-drawer .sidebar {
 }
 .arch-node.selected.pulse .arch-node-box, .arch-node.hot.pulse .arch-node-box { animation: node-arrive .6s ease-out; }
 @media (prefers-reduced-motion: reduce) { .arch-node.pulse .arch-node-box { animation: none; } }
+/* while the map sits idle the packets fade out and the highlight pulses stop, so the page does no work */
+#arch-modal .arch-packet { transition: opacity .35s ease; }
+#arch-modal.motion-off .arch-packet { opacity: 0; }
+#arch-modal.motion-off .arch-node.hot .arch-node-box,
+#arch-modal.motion-off .arch-node.pulse .arch-node-box,
+#arch-modal.motion-off .arch-edge-group.flowing .arch-packet .packet-halo { animation: none; }
 
 .study-pane { --study-w: 380px; }
 

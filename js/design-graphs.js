@@ -49,7 +49,7 @@ const DesignGraph = (() => {
   let nodeMap = new Map();
   let edgesByNode = new Map();
   const listeners = [];
-  const emit = () => listeners.forEach((fn) => { try { fn(getFocus()); } catch (e) { /* listener bug */ } });
+  const emit = () => { wake(); listeners.forEach((fn) => { try { fn(getFocus()); } catch (e) { /* listener bug */ } }); };
   const link = (text) => (typeof ConceptLib !== 'undefined' ? ConceptLib.linkTerms(esc(text)) : esc(text));
   const nodeLabel = (id) => (nodeMap.get(id) ? nodeMap.get(id).label : id);
   const KIND_MEANING = {
@@ -59,6 +59,27 @@ const DesignGraph = (() => {
   };
 
   function byId(id) { return document.getElementById(id); }
+
+  /*
+   * The moving packets force a layout on every frame (about 40% of a CPU core), so they only run
+   * for a few seconds after someone touches the map, and never in a hidden tab or with reduced motion.
+   */
+  const MOTION_MS = 12000;
+  const REDUCED = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  let motionTimer = 0;
+
+  function wake() {
+    clearTimeout(motionTimer);
+    setMotion(true);
+    motionTimer = setTimeout(() => setMotion(false), MOTION_MS);
+  }
+
+  function setMotion(on) {
+    if (!svg || !modal) return;
+    const run = on && !document.hidden && !(REDUCED && REDUCED.matches) && svg.getBoundingClientRect().width > 0;
+    if (run) svg.unpauseAnimations(); else svg.pauseAnimations();
+    modal.classList.toggle('motion-off', !run);
+  }
 
   function init() {
     modal = byId('arch-modal');
@@ -91,6 +112,9 @@ const DesignGraph = (() => {
     const queueResize = () => { cancelAnimationFrame(sizeRaf); sizeRaf = requestAnimationFrame(onCanvasResize); };
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(queueResize).observe(svg);
     else window.addEventListener('resize', queueResize);
+    svg.addEventListener('pointerdown', wake, { passive: true });
+    svg.addEventListener('wheel', wake, { passive: true });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) setMotion(false); else wake(); });
     if (PORTRAIT) {
       const onTurn = () => { queueResize(); syncControls(); };
       if (PORTRAIT.addEventListener) PORTRAIT.addEventListener('change', onTurn);
@@ -966,6 +990,7 @@ const DesignGraph = (() => {
     declutterLabels();
     bindPulses();
     syncControls();
+    wake();
   }
 
   /** Put back the selection or user-action highlight after a redraw, without touching the side panel. */

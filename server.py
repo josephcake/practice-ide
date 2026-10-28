@@ -18,6 +18,7 @@ Endpoints:
     POST /api/ai-design-eval {context} -> {evaluation, model, at}
 """
 
+import gzip
 import json
 import os
 import re
@@ -829,16 +830,72 @@ def deepseek_stream(messages, max_tokens=1400):
     return chunks()
 
 
+# Text assets are sent gzipped with an ETag; the browser revalidates each load, so edits show up
+# immediately but unchanged files come back as a tiny 304 instead of the full 1 MB again.
+STATIC_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".md": "text/markdown; charset=utf-8",
+}
+STATIC_CACHE = {}
+STATIC_CACHE_LOCK = threading.Lock()
+
+
 class Handler(SimpleHTTPRequestHandler):
     server_version = "GSInterviewIDE/1.0"
 
     def __init__(self, *args, **kwargs):
+        self.cache_control = "no-store"
         super().__init__(*args, directory=ROOT, **kwargs)
 
     def end_headers(self):
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", self.cache_control)
         self.send_header("X-Content-Type-Options", "nosniff")
         super().end_headers()
+
+    def serve_static(self):
+        """Serve a text asset gzipped with an ETag. Returns False for anything else."""
+        path = self.translate_path(self.path)
+        if os.path.isdir(path):
+            path = os.path.join(path, "index.html")
+        content_type = STATIC_TYPES.get(os.path.splitext(path)[1].lower())
+        if not content_type or not os.path.isfile(path):
+            return False
+        st = os.stat(path)
+        use_gzip = "gzip" in (self.headers.get("Accept-Encoding") or "")
+        etag = '"%x-%x%s"' % (st.st_mtime_ns, st.st_size, "-gz" if use_gzip else "")
+        self.cache_control = "no-cache"
+        if self.headers.get("If-None-Match") == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.end_headers()
+            return True
+        key = (path, use_gzip)
+        with STATIC_CACHE_LOCK:
+            hit = STATIC_CACHE.get(key)
+        if hit and hit[0] == etag:
+            body = hit[1]
+        else:
+            with open(path, "rb") as f:
+                body = f.read()
+            if use_gzip:
+                body = gzip.compress(body, 6)
+            with STATIC_CACHE_LOCK:
+                STATIC_CACHE[key] = (etag, body)
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("ETag", etag)
+        self.send_header("Vary", "Accept-Encoding")
+        if use_gzip:
+            self.send_header("Content-Encoding", "gzip")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+        return True
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[%s] %s\n" % (self.log_date_time_string(), fmt % args))
@@ -852,12 +909,15 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        self.cache_control = "no-store"
         if self.path == "/api/graph/status":
             return self.send_json(200, graph_status())
         if self.path.startswith("/api/"):
             return self.send_json(404, {"error": "Unknown API route."})
         if "/." in self.path:
             return self.send_json(404, {"error": "Not found."})
+        if self.serve_static():
+            return None
         return super().do_GET()
 
     def handle_graph_build(self):
@@ -1043,6 +1103,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.close_connection = True
 
     def do_POST(self):
+        self.cache_control = "no-store"
         if self.path == "/api/ai-chat":
             return self.handle_chat()
         if self.path == "/api/ai-design-eval":
