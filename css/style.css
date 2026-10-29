@@ -2752,6 +2752,8 @@ body.mode-aws .side-aws { display: flex; }
 }
 .svc-chip::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: var(--cat); }
 .svc-chip:hover { background: color-mix(in srgb, var(--cat) 22%, #111925); color: #fff; }
+/* the unabbreviated name sits inside the pill, quieter than the acronym */
+.svc-expand { font-weight: 400; opacity: .72; margin-left: 4px; }
 .svc-link {
   border: 0; background: none; padding: 0; font: inherit; color: inherit;
   text-decoration: underline; text-decoration-color: #ffb37a; text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: pointer;

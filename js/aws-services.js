@@ -6,6 +6,8 @@
    these by id; nodes on the canvas carry the id in `svc`.
 
    avoid: [reason, alternative service id or null]
+   expand: what an abbreviated short name stands for, shown in the side panel as
+           "ALB (Application Load Balancer)". Only set for AWS-specific acronyms.
    aiKey: the service is essential to AI / gen AI work (gets an "AI" tag).
    Facts checked against AWS docs, Oct 2026. Prices are approximate
    us-east-1 list prices, meant for comparison, not quotes.
@@ -33,7 +35,7 @@ const AWS_SERVICES = [
     plain: 'A system you do not run on AWS, such as Stripe, Slack, Zendesk, or a partner API.' },
 
   /* ---------------- compute ---------------- */
-  { id: 'ec2', cat: 'compute', name: 'Amazon EC2', short: 'EC2', shape: 'service', popular: true,
+  { id: 'ec2', cat: 'compute', name: 'Amazon EC2', short: 'EC2', expand: 'Elastic Compute Cloud', shape: 'service', popular: true,
     plain: 'Rent virtual servers by the second. You choose the CPU, memory, GPU, and operating system, and you patch and scale them yourself.',
     analogy: 'Leasing your own car: total control and the cheapest per mile if you drive a lot, but you do the maintenance.',
     use: ['Steady 24/7 workloads, where committed pricing makes it the cheapest option', 'You need a specific OS, kernel, agent, or licensed software', 'GPUs or other accelerators for training and self-hosting models', 'Moving existing servers to AWS as they are ("lift and shift")'],
@@ -59,7 +61,7 @@ const AWS_SERVICES = [
     url: 'https://aws.amazon.com/lambda/',
     aliases: ['Lambda', 'AWS Lambda', 'Lambda function', 'Lambda functions'] },
 
-  { id: 'ecs', cat: 'compute', name: 'Amazon ECS', short: 'ECS', shape: 'service', popular: true,
+  { id: 'ecs', cat: 'compute', name: 'Amazon ECS', short: 'ECS', expand: 'Elastic Container Service', shape: 'service', popular: true,
     plain: 'AWS’s own container orchestrator. You describe a container (image, CPU, memory, port) and ECS keeps the right number of copies running, replaces failed ones, and registers them with the load balancer.',
     analogy: 'A shift manager who decides how many cooks work tonight and replaces anyone who leaves. The kitchen they cook in (Fargate or EC2) is separate.',
     use: ['Containerized web services and workers with the least operational effort', 'Teams that do not need the Kubernetes ecosystem', 'Getting a container onto a public HTTPS URL fast with ECS Express Mode (the recommended replacement for App Runner)'],
@@ -84,7 +86,7 @@ const AWS_SERVICES = [
     url: 'https://aws.amazon.com/fargate/',
     aliases: ['Fargate', 'AWS Fargate', 'Fargate Spot'] },
 
-  { id: 'eks', cat: 'compute', name: 'Amazon EKS', short: 'EKS', shape: 'service', popular: true,
+  { id: 'eks', cat: 'compute', name: 'Amazon EKS', short: 'EKS', expand: 'Elastic Kubernetes Service', shape: 'service', popular: true,
     plain: 'Managed Kubernetes. AWS runs the Kubernetes control plane; your pods run on EC2 nodes, Fargate, or EKS Auto Mode.',
     analogy: 'A franchise kitchen that follows the global Kubernetes recipe book, so your cooks can work in any franchise (any cloud).',
     use: ['You already use Kubernetes, Helm charts, operators, or Argo CD', 'Portability across clouds and on-premises', 'Large platforms with many teams and custom scheduling (Karpenter)', 'GPU clusters for training and inference with Kubernetes tooling'],
@@ -111,7 +113,7 @@ const AWS_SERVICES = [
     aliases: ['GPU instances', 'Trainium', 'Inferentia', 'accelerated instances', 'Capacity Blocks'] },
 
   /* ---------------- storage ---------------- */
-  { id: 's3', cat: 'storage', name: 'Amazon S3', short: 'S3', shape: 'db', popular: true,
+  { id: 's3', cat: 'storage', name: 'Amazon S3', short: 'S3', expand: 'Simple Storage Service', shape: 'db', popular: true,
     plain: 'Object storage: put any file (an "object") in a bucket under a key and get it back over HTTPS. Practically unlimited, extremely durable, and the cheapest place to keep bytes.',
     analogy: 'An infinite, fireproof warehouse that gives you a claim ticket for every box.',
     use: ['User uploads, images, video, backups, logs', 'Static websites (behind CloudFront)', 'Data lakes and ML datasets', 'Model weights and training checkpoints'],
@@ -124,7 +126,7 @@ const AWS_SERVICES = [
     url: 'https://aws.amazon.com/s3/',
     aliases: ['S3', 'Amazon S3', 'S3 bucket', 'S3 Glacier', 'Glacier Deep Archive', 'Glacier', 'pre-signed URL', 'presigned URL'] },
 
-  { id: 'ebs', cat: 'storage', name: 'Amazon EBS', short: 'EBS', shape: 'db', popular: true,
+  { id: 'ebs', cat: 'storage', name: 'Amazon EBS', short: 'EBS', expand: 'Elastic Block Store', shape: 'db', popular: true,
     plain: 'A network hard drive (block storage) that attaches to one EC2 instance. It holds the operating system and anything that needs a real disk, like a self-managed database.',
     analogy: 'A USB drive plugged into one computer: fast, but only that computer can use it.',
     use: ['Boot volumes for EC2', 'Self-managed databases (Postgres, MongoDB, Kafka) on EC2', 'Low-latency random reads and writes'],
@@ -135,7 +137,7 @@ const AWS_SERVICES = [
     url: 'https://aws.amazon.com/ebs/',
     aliases: ['EBS', 'Amazon EBS', 'EBS volume', 'gp3'] },
 
-  { id: 'efs', cat: 'storage', name: 'Amazon EFS', short: 'EFS', shape: 'db',
+  { id: 'efs', cat: 'storage', name: 'Amazon EFS', short: 'EFS', expand: 'Elastic File System', shape: 'db',
     plain: 'A shared network file system (NFS) that thousands of EC2 instances, containers, and Lambda functions can mount at once. It grows and shrinks automatically.',
     analogy: 'The shared drive at the office: everyone sees the same folders.',
     use: ['Several containers or servers need the same files (CMS uploads, shared config)', 'Moving apps that expect a normal POSIX file system', 'Notebooks and home directories shared by a team'],
@@ -157,7 +159,7 @@ const AWS_SERVICES = [
     aliases: ['FSx for Lustre', 'FSx', 'Lustre'] },
 
   /* ---------------- databases ---------------- */
-  { id: 'rds', cat: 'database', name: 'Amazon RDS', short: 'RDS', shape: 'db', popular: true,
+  { id: 'rds', cat: 'database', name: 'Amazon RDS', short: 'RDS', expand: 'Relational Database Service', shape: 'db', popular: true,
     plain: 'Managed relational databases: PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, and Db2. AWS handles installs, patching, backups, and failover; you write SQL.',
     analogy: 'A classic filing cabinet that comes with a full-time clerk.',
     use: ['Typical business apps with joins, transactions, and reports', 'Moving an existing Postgres, MySQL, or SQL Server database to AWS', 'Moderate traffic where one primary database is enough'],
@@ -216,7 +218,7 @@ const AWS_SERVICES = [
     aliases: ['OpenSearch', 'Amazon OpenSearch Service', 'OpenSearch Serverless', 'Elasticsearch'] },
 
   /* ---------------- networking ---------------- */
-  { id: 'vpc', cat: 'network', name: 'Amazon VPC', short: 'VPC', shape: 'edge', popular: true,
+  { id: 'vpc', cat: 'network', name: 'Amazon VPC', short: 'VPC', expand: 'Virtual Private Cloud', shape: 'edge', popular: true,
     plain: 'Your private network inside AWS. You split it into public subnets (reachable from the internet) and private subnets (not), and control traffic with route tables and security groups.',
     analogy: 'A gated campus: a public lobby, private offices, and a badge reader on every door.',
     use: ['Keep databases and internal services off the internet (private subnets)', 'Security groups that let only the app reach the database port', 'A NAT gateway so private resources can call out to the internet', 'VPC endpoints (PrivateLink) to reach S3, DynamoDB, or Bedrock without the internet'],
@@ -250,7 +252,7 @@ const AWS_SERVICES = [
     url: 'https://aws.amazon.com/cloudfront/',
     aliases: ['CloudFront', 'Amazon CloudFront', 'CDN', 'Lambda@Edge', 'CloudFront Functions', 'Origin Access Control'] },
 
-  { id: 'elb', cat: 'network', name: 'Elastic Load Balancing (ALB, NLB)', short: 'ALB', shape: 'edge', popular: true,
+  { id: 'elb', cat: 'network', name: 'Elastic Load Balancing (ALB, NLB)', short: 'ALB', expand: 'Application Load Balancer', shape: 'edge', popular: true,
     plain: 'Load balancers that spread traffic across healthy targets in several Availability Zones. An ALB understands HTTP and routes by path or host; an NLB handles raw TCP/UDP at extreme scale with static IPs.',
     analogy: 'The host at a busy restaurant, seating each guest at whichever table is free.',
     use: ['ALB: web apps and APIs on containers, EC2, or Lambda, with path-based routing and WebSockets', 'ALB: steady high traffic where per-request API pricing would cost more', 'NLB: TCP/UDP, millions of connections, static IPs, very low latency'],
@@ -272,7 +274,7 @@ const AWS_SERVICES = [
     aliases: ['API Gateway', 'Amazon API Gateway'] },
 
   /* ---------------- messaging and workflows ---------------- */
-  { id: 'sqs', cat: 'integration', name: 'Amazon SQS', short: 'SQS', shape: 'queue', popular: true,
+  { id: 'sqs', cat: 'integration', name: 'Amazon SQS', short: 'SQS', expand: 'Simple Queue Service', shape: 'queue', popular: true,
     plain: 'A fully managed message queue. Producers drop messages in; workers pull, process, and delete them. If a worker crashes, the message reappears for another try.',
     analogy: 'The ticket rail in a diner kitchen: orders wait until a cook is free.',
     use: ['Background jobs, so the API can answer right away', 'Absorbing spikes so workers run at a steady pace', 'Retries, with a dead-letter queue for messages that keep failing', 'FIFO queues when order and de-duplication matter (per message group)'],
@@ -284,7 +286,7 @@ const AWS_SERVICES = [
     url: 'https://aws.amazon.com/sqs/',
     aliases: ['SQS', 'Amazon SQS', 'SQS FIFO', 'dead-letter queue', 'DLQ'] },
 
-  { id: 'sns', cat: 'integration', name: 'Amazon SNS', short: 'SNS', shape: 'queue', popular: true,
+  { id: 'sns', cat: 'integration', name: 'Amazon SNS', short: 'SNS', expand: 'Simple Notification Service', shape: 'queue', popular: true,
     plain: 'Pub/sub messaging. Publish one message to a topic and SNS pushes a copy to every subscriber: SQS queues, Lambda functions, HTTP endpoints, email, SMS, or mobile push.',
     analogy: 'A group text: send once and everyone on the list gets it.',
     use: ['Fan-out: one event to several queues or services', 'Alerts (CloudWatch alarm → SNS → email, SMS, Slack, PagerDuty)', 'Mobile push and SMS to users'],
@@ -339,7 +341,7 @@ const AWS_SERVICES = [
     aliases: ['Step Functions', 'AWS Step Functions', 'state machine'] },
 
   /* ---------------- security ---------------- */
-  { id: 'iam', cat: 'security', name: 'AWS IAM', short: 'IAM', shape: 'service', popular: true,
+  { id: 'iam', cat: 'security', name: 'AWS IAM', short: 'IAM', expand: 'Identity and Access Management', shape: 'service', popular: true,
     plain: 'Identity and Access Management decides who (people and services) can do which actions on which AWS resources. Permissions are JSON policies attached to users, groups, and roles.',
     analogy: 'Building key cards: each card opens only the doors it needs.',
     use: ['A role for every piece of code: a Lambda execution role or ECS task role with only what it needs', 'Least-privilege policies (s3:GetObject on one bucket, not s3:*)', 'Cross-account access by assuming roles', 'Engineers signing in through IAM Identity Center (SSO) instead of long-lived keys'],
@@ -361,7 +363,7 @@ const AWS_SERVICES = [
     url: 'https://aws.amazon.com/cognito/',
     aliases: ['Cognito', 'Amazon Cognito', 'Cognito user pool', 'user pool'] },
 
-  { id: 'kms', cat: 'security', name: 'AWS KMS', short: 'KMS', shape: 'service', popular: true,
+  { id: 'kms', cat: 'security', name: 'AWS KMS', short: 'KMS', expand: 'Key Management Service', shape: 'service', popular: true,
     plain: 'Key Management Service creates and guards encryption keys. S3, EBS, RDS, DynamoDB, and others encrypt your data with KMS keys, and every use of a key is logged in CloudTrail.',
     analogy: 'A bank vault for keys: the keys never leave, and you ask the vault to lock or unlock things for you.',
     use: ['Encrypting data at rest with keys you control (customer managed keys)', 'Cutting off access instantly by disabling a key', 'Compliance: proof of who used which key and when', 'Envelope encryption in your own code'],
@@ -381,7 +383,7 @@ const AWS_SERVICES = [
     url: 'https://aws.amazon.com/secrets-manager/',
     aliases: ['Secrets Manager', 'AWS Secrets Manager', 'Parameter Store'] },
 
-  { id: 'waf', cat: 'security', name: 'AWS WAF and Shield', short: 'WAF', shape: 'edge', popular: true,
+  { id: 'waf', cat: 'security', name: 'AWS WAF and Shield', short: 'WAF', expand: 'Web Application Firewall', shape: 'edge', popular: true,
     plain: 'A web application firewall that inspects HTTP requests at CloudFront, an ALB, or API Gateway and blocks attacks: SQL injection, cross-site scripting, bad bots, and floods from one IP. Shield adds DDoS protection.',
     analogy: 'A bouncer with a list of known troublemakers and a rule for anyone pushing too hard.',
     use: ['Managed rule sets for common exploits (OWASP top 10)', 'Rate-based rules against credential stuffing and scraping', 'Geo or IP blocking', 'Bot Control and CAPTCHA challenges'],

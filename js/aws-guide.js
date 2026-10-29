@@ -84,10 +84,17 @@ const AwsGuide = (() => {
     });
   }
 
+  /** "ALB (Application Load Balancer)" for abbreviated services, plain short name otherwise. */
+  function svcLabel(s) {
+    return s.expand
+      ? `${esc(s.short)}<span class="svc-expand">(${esc(s.expand)})</span>`
+      : esc(s.short);
+  }
+
   function chip(id) {
     const s = SVC.get(id);
     if (!s) return '';
-    return `<button type="button" class="svc-chip" data-svc="${id}" style="--cat:${catOf(s).color}" title="${esc(s.name)}: ${esc(s.plain)}">${esc(s.short)}</button>`;
+    return `<button type="button" class="svc-chip" data-svc="${id}" style="--cat:${catOf(s).color}" title="${esc(s.name)}: ${esc(s.plain)}">${svcLabel(s)}</button>`;
   }
 
   function lessonsWith(id) {
@@ -354,7 +361,7 @@ const AwsGuide = (() => {
       html += `<div class="group-h aws-group aws-group-${g}">${esc(label)} <span class="cnt">${done}/${items.length}</span></div>${items.map(row).join('')}`;
     });
     if (q.length >= 2) {
-      const hits = AWS_SERVICES.filter((s) => !s.nonAws && [s.name, s.short, ...(s.aliases || []), s.plain].join(' ').toLowerCase().includes(q)).slice(0, 12);
+      const hits = AWS_SERVICES.filter((s) => !s.nonAws && [s.name, s.short, s.expand || '', ...(s.aliases || []), s.plain].join(' ').toLowerCase().includes(q)).slice(0, 12);
       if (hits.length) {
         html += `<div class="group-h aws-group">Services <span class="cnt">${hits.length}</span></div>${hits.map((s) => `<div class="item design-item aws-svc-hit" data-svc-hit="${s.id}" title="${esc(s.plain)}">
           <span class="aws-dot" style="--cat:${catOf(s).color}"></span>
